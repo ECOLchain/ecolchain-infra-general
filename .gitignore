@@ -42,3 +42,9 @@ terraform.rc
 # Optional: ignore plan files saved before destroying Terraform configuration
 # Uncomment the line below if you want to ignore planout files.
 # planout
+
+# Ignore local environment directories containing secrets
+infra/terraform/cloudflare/email-routing/env/
+/.idea/*
+/infra/terraform/cloudflare/email-routing/.terraform.lock.hcl
+/infra/terraform/cloudflare/secret.env
