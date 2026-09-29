@@ -17,9 +17,9 @@ variable "cloudflare_zone_id" {
 }
 
 variable "domain_name" {
-  description = "Nome do domínio da Landing Page"
+  description = "Nome do domínio principal da Landing Page"
   type        = string
-  default     = "lp.ecolchain.com"
+  default     = "ecolchain.com"
 }
 
 variable "vercel_api_token" {

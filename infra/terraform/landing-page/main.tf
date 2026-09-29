@@ -27,23 +27,40 @@ provider "vercel" {
 resource "vercel_project" "landing_page" {
   name      = var.vercel_project_name
   framework = "nextjs"
-  
-  root_directory = "app"
 }
 
-# 2. Domínio da Landing Page na Vercel (lp.ecolchain.com)
-resource "vercel_project_domain" "lp" {
+# 2. Domínio Apex da Landing Page na Vercel (ecolchain.com)
+resource "vercel_project_domain" "apex" {
   project_id = vercel_project.landing_page.id
   domain     = var.domain_name
 }
 
-# 3. Apontamento CNAME no Cloudflare para lp -> Vercel
-resource "cloudflare_dns_record" "vercel_cname_lp" {
+# 3. Domínio WWW da Landing Page na Vercel (www.ecolchain.com) com redirecionamento
+resource "vercel_project_domain" "www" {
+  project_id           = vercel_project.landing_page.id
+  domain               = "www.${var.domain_name}"
+  redirect             = vercel_project_domain.apex.domain
+  redirect_status_code = 308
+}
+
+# 4. Apontamento A no Cloudflare para @ (ecolchain.com) -> Vercel
+resource "cloudflare_dns_record" "vercel_apex" {
   zone_id = var.cloudflare_zone_id
-  name    = "lp"
+  name    = "@"
+  type    = "A"
+  content = "76.76.21.21"
+  proxied = false
+  ttl     = 1
+  comment = "Apontamento Vercel Landing Page Apex Domain"
+}
+
+# 5. Apontamento CNAME no Cloudflare para www -> Vercel
+resource "cloudflare_dns_record" "vercel_cname_www" {
+  zone_id = var.cloudflare_zone_id
+  name    = "www"
   type    = "CNAME"
   content = "cname.vercel-dns.com"
   proxied = false
   ttl     = 1
-  comment = "Apontamento Vercel Landing Page LP Subdomain"
+  comment = "Apontamento Vercel Landing Page WWW Subdomain"
 }
