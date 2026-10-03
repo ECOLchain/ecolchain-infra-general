@@ -93,11 +93,12 @@ jobs:
             exit 1
           fi
           echo "plan_exit_code=$CODE" >> "$GITHUB_ENV"
+          echo "MODULE_SLUG=$SLUG" >> "$GITHUB_ENV"
 
       - name: Upload Plan Output
         uses: actions/upload-artifact@v4
         with:
-          name: plan-${{ matrix.dir }}
+          name: plan-${{ env.MODULE_SLUG }}
           path: ${{ runner.temp }}/plan-*.txt
           retention-days: 1
 
