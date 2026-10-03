@@ -22,6 +22,7 @@ env:
   TF_VAR_tenancy_ocid: ${{ secrets.OCI_TENANCY_OCID }}
   TF_VAR_user_ocid: ${{ secrets.OCI_USER_OCID }}
   TF_VAR_fingerprint: ${{ secrets.OCI_FINGERPRINT }}
+  TF_VAR_basic_auth: ${{ secrets.DEV_FRONTEND_BASIC_AUTH }}
   TF_IN_AUTOMATION: '1'
   TF_INPUT: '0'
 
@@ -38,7 +39,7 @@ jobs:
       - name: Find module directories
         id: dirs
         run: |
-          DIRS=$(find infra/terraform -name '*.tf' -not -path '*/.terraform/*' -exec dirname {} \; | sort -u)
+          DIRS=$(find infra/terraform -name 'backend.tf' -not -path '*/.terraform/*' -exec dirname {} \; | sort -u)
           echo "Modulos detectados:"
           echo "$DIRS"
           echo "matrix=$(echo "$DIRS" | jq -R -s -c 'split("\n") | map(select(length > 0))')" >> "$GITHUB_OUTPUT"
