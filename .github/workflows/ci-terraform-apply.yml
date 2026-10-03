@@ -22,7 +22,6 @@ env:
   TF_VAR_tenancy_ocid: ${{ secrets.OCI_TENANCY_OCID }}
   TF_VAR_user_ocid: ${{ secrets.OCI_USER_OCID }}
   TF_VAR_fingerprint: ${{ secrets.OCI_FINGERPRINT }}
-  TF_VAR_private_key_path: ${{ runner.temp }}/oci_api_key.pem
   TF_IN_AUTOMATION: '1'
   TF_INPUT: '0'
 
@@ -68,6 +67,7 @@ jobs:
         run: |
           printf '%s' "${{ secrets.OCI_PRIVATE_KEY }}" > "$RUNNER_TEMP/oci_api_key.pem"
           chmod 600 "$RUNNER_TEMP/oci_api_key.pem"
+          echo "TF_VAR_private_key_path=$RUNNER_TEMP/oci_api_key.pem" >> "$GITHUB_ENV"
 
       - name: Terraform Init
         run: terraform -chdir=${{ matrix.dir }} init -input=false
