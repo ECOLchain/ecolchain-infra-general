@@ -40,6 +40,7 @@ resource "cloudflare_workers_script" "front" {
   account_id         = var.cloudflare_account_id
   script_name        = "${var.worker_name_prefix}-${var.env}"
   content            = file("${path.module}/worker.js")
+  main_module        = "worker.js"
   compatibility_date = "2025-06-01"
 
   bindings = concat(
