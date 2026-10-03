@@ -1,4 +1,4 @@
-# ecolchain-infra-networks
+# ecolchain-infra-general
 
 Infraestrutura como código (Terraform) do ecossistema ecolchain: recursos de rede,
 DNS, e-mail e hosting nos providers **OCI**, **Cloudflare** e **Vercel**.
@@ -187,3 +187,5 @@ O módulo `oci/tfstate-backend` adicionalmente lê `env/terraform.tfvars` com
 - `.terraform.lock.hcl` **é commitado** — sempre gere para `linux_amd64`
   (CI) e `darwin_arm64` (local) com `terraform providers lock`.
 - `*.tfstate`, `*.tfvars`, `*.env`, `*.pem`, `env/` são gitignored por padrão.
+# ecolchain-infra-general
+Projetc for save general docs
