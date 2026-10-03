@@ -1,0 +1,170 @@
+name: CI Terraform (Feature -> Plan & Auto-PR)
+
+on:
+  push:
+    branches:
+      - 'feature/**'
+      - 'feat/**'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  AWS_ACCESS_KEY_ID: ${{ secrets.OCI_S3_ACCESS_KEY }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.OCI_S3_SECRET_KEY }}
+  AWS_DEFAULT_REGION: sa-saopaulo-1
+  AWS_REQUEST_CHECKSUM_CALCULATION: WHEN_REQUIRED
+  AWS_RESPONSE_CHECKSUM_VALIDATION: WHEN_REQUIRED
+  TF_VAR_cloudflare_email: ${{ secrets.CLOUDFLARE_EMAIL }}
+  TF_VAR_cloudflare_api_key: ${{ secrets.CLOUDFLARE_API_KEY }}
+  TF_VAR_cloudflare_zone_id: ${{ secrets.CLOUDFLARE_ZONE_ID }}
+  TF_VAR_cloudflare_account_id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+  TF_VAR_vercel_api_token: ${{ secrets.VERCEL_API_TOKEN }}
+  TF_VAR_tenancy_ocid: ${{ secrets.OCI_TENANCY_OCID }}
+  TF_VAR_user_ocid: ${{ secrets.OCI_USER_OCID }}
+  TF_VAR_fingerprint: ${{ secrets.OCI_FINGERPRINT }}
+  TF_IN_AUTOMATION: '1'
+  TF_INPUT: '0'
+
+jobs:
+  detect:
+    name: Detect Terraform Modules
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.dirs.outputs.matrix }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Find module directories
+        id: dirs
+        run: |
+          DIRS=$(find infra/terraform -name '*.tf' -not -path '*/.terraform/*' -exec dirname {} \; | sort -u)
+          echo "Modulos detectados:"
+          echo "$DIRS"
+          echo "matrix=$(echo "$DIRS" | jq -R -s -c 'split("\n") | map(select(length > 0))')" >> "$GITHUB_OUTPUT"
+
+  terraform:
+    name: Plan (${{ matrix.dir }})
+    needs: detect
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        dir: ${{ fromJSON(needs.detect.outputs.matrix) }}
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '~> 1.13.0'
+
+      - name: Write OCI API Key File
+        run: |
+          printf '%s' "${{ secrets.OCI_PRIVATE_KEY }}" > "$RUNNER_TEMP/oci_api_key.pem"
+          chmod 600 "$RUNNER_TEMP/oci_api_key.pem"
+          echo "TF_VAR_private_key_path=$RUNNER_TEMP/oci_api_key.pem" >> "$GITHUB_ENV"
+
+      - name: Terraform Fmt Check
+        run: terraform -chdir=${{ matrix.dir }} fmt -check -diff
+
+      - name: Terraform Init
+        run: terraform -chdir=${{ matrix.dir }} init -input=false
+
+      - name: Terraform Validate
+        run: terraform -chdir=${{ matrix.dir }} validate
+
+      - name: Terraform Plan
+        run: |
+          SLUG=$(echo "${{ matrix.dir }}" | tr '/' '-')
+          set -o pipefail
+          terraform -chdir=${{ matrix.dir }} plan -detailed-exitcode -input=false -no-color 2>&1 | tee "$RUNNER_TEMP/plan-$SLUG.txt"
+          CODE=${PIPESTATUS[0]}
+          # 0 = sem mudancas, 2 = plano com mudancas (ok), 1 = erro (falha)
+          if [ "$CODE" -eq 1 ]; then
+            exit 1
+          fi
+          echo "plan_exit_code=$CODE" >> "$GITHUB_ENV"
+          echo "MODULE_SLUG=$SLUG" >> "$GITHUB_ENV"
+
+      - name: Upload Plan Output
+        uses: actions/upload-artifact@v4
+        with:
+          name: plan-${{ env.MODULE_SLUG }}
+          path: ${{ runner.temp }}/plan-*.txt
+          retention-days: 1
+
+  auto-pr:
+    name: Auto PR Feature -> Main
+    needs: terraform
+    if: success()
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Download Plan Outputs
+        uses: actions/download-artifact@v4
+        with:
+          pattern: plan-*
+          path: plans/
+          merge-multiple: true
+
+      - name: Auto Create or Update PR to Main
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH_NAME="${GITHUB_REF#refs/heads/}"
+
+          PR_BODY="✨ **Terraform Plan executado com sucesso!**
+
+          Todos os módulos em \`infra/terraform\` passaram por \`fmt\`, \`validate\` e \`plan\`.
+          Confira o resultado do plan de cada módulo no comentário abaixo.
+
+          ---
+          PR automático gerado pelo pipeline de CI após validação da branch \`$BRANCH_NAME\`.
+          ⚠️ **Atenção:** após o merge, o pipeline de CD executará \`terraform apply\` na infraestrutura de produção."
+
+          EXISTING_PR=$(gh pr list --head "$BRANCH_NAME" --base main --json number --jq '.[0].number')
+
+          if [ -z "$EXISTING_PR" ]; then
+            echo "Criando novo PR de $BRANCH_NAME para main..."
+            gh pr create \
+              --head "$BRANCH_NAME" \
+              --base main \
+              --title "feat: $BRANCH_NAME" \
+              --body "$PR_BODY" || echo "⚠️ Para criar PRs automáticos via GitHub Actions, ative a opção 'Allow GitHub Actions to create and approve pull requests' em Settings -> Actions -> General."
+          else
+            echo "Atualizando PR #$EXISTING_PR..."
+            gh pr edit "$EXISTING_PR" --body "$PR_BODY" || true
+          fi
+
+          PR_NUMBER=$(gh pr list --head "$BRANCH_NAME" --base main --json number --jq '.[0].number')
+
+          if [ -n "$PR_NUMBER" ]; then
+            COMMENT_FILE="$RUNNER_TEMP/plan-comment.md"
+            {
+              echo "## 📋 Resultado do Terraform Plan"
+              echo ""
+              for f in plans/plan-*.txt; do
+                MODULE=$(basename "$f" .txt | sed 's/^plan-//')
+                echo "<details><summary>📦 <code>$MODULE</code></summary>"
+                echo ""
+                echo '```hcl'
+                tail -c 20000 "$f"
+                echo '```'
+                echo "</details>"
+                echo ""
+              done
+            } > "$COMMENT_FILE"
+            gh pr comment "$PR_NUMBER" --body-file "$COMMENT_FILE" || true
+          fi
