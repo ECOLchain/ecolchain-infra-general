@@ -44,7 +44,9 @@ terraform.rc
 # planout
 
 # Ignore local environment directories containing secrets
-infra/terraform/cloudflare/email-routing/env/
+infra/terraform/**/env/
 /.idea/*
-/infra/terraform/cloudflare/email-routing/.terraform.lock.hcl
-/infra/terraform/cloudflare/secret.env
+/infra/secret.env
+*.pem
+*.env
+.DS_Store
