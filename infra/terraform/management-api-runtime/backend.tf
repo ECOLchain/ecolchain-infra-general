@@ -18,4 +18,3 @@ terraform {
   }
 }
 
-# (comentario de retry - ver docs/DUVIDAS.md: apply re-tenta via merge)
