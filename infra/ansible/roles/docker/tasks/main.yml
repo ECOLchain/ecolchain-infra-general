@@ -5,9 +5,12 @@
   failed_when: false
 
 - name: Instalar yum-utils (config-manager)
-  ansible.builtin.dnf:
-    name: yum-utils
-    state: present
+  ansible.builtin.shell: |
+    rpm -q yum-utils >/dev/null 2>&1 || dnf install -y yum-utils
+  args:
+    executable: /bin/bash
+  register: yumutils_pkg
+  changed_when: yumutils_pkg.stdout is search("Installing|Installed:")
   when: docker_bin.rc != 0
 
 - name: Adicionar repo docker-ce (RHEL-family)
@@ -17,14 +20,12 @@
   when: docker_bin.rc != 0
 
 - name: Instalar Docker Engine + compose plugin
-  ansible.builtin.dnf:
-    name:
-      - docker-ce
-      - docker-ce-cli
-      - containerd.io
-      - docker-buildx-plugin
-      - docker-compose-plugin
-    state: present
+  ansible.builtin.shell: |
+    rpm -q docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin >/dev/null 2>&1 || dnf install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+  args:
+    executable: /bin/bash
+  register: docker_pkgs
+  changed_when: docker_pkgs.stdout is search("Installing|Installed:")
   when: docker_bin.rc != 0
 
 - name: daemon.json — rotação de logs
