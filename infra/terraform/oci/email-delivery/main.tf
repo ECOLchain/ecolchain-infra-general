@@ -59,9 +59,11 @@ resource "oci_email_dkim" "ecolchain" {
 # CNAME do DKIM no Cloudflare (DNS only - nao pode ser proxied)
 # SPF/DMARC do apex ficam fora daqui: o Email Delivery usa Return-Path proprio
 # por padrao, entao o DMARC passa pelo DKIM alinhado
+# A OCI devolve dns_subdomain_name com ponto final; o Cloudflare remove o
+# ponto, o que causaria diff permanente - por isso o trimsuffix
 resource "cloudflare_dns_record" "dkim" {
   zone_id = var.cloudflare_zone_id
-  name    = oci_email_dkim.ecolchain.dns_subdomain_name
+  name    = trimsuffix(oci_email_dkim.ecolchain.dns_subdomain_name, ".")
   type    = "CNAME"
   content = trimsuffix(oci_email_dkim.ecolchain.cname_record_value, ".")
   proxied = false
