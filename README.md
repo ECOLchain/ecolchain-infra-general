@@ -10,7 +10,8 @@ infra/
 ├── secret.env                  # LOCAL (gitignored) - credenciais de uso local
 └── terraform/
     ├── oci/
-    │   └── tfstate-backend/    # Bucket OCI de state + Customer Secret Key (S3)
+    │   ├── tfstate-backend/    # Bucket OCI de state + Customer Secret Key (S3)
+    │   └── email-delivery/     # OCI Email Delivery: dominio ecolchain.com + DKIM (Cloudflare) + sender + SMTP
     ├── landing-page/           # Projeto Vercel + DNS ecolchain.com / www (Cloudflare)
     ├── cloudflare/
     │   └── email-routing/      # Email Routing catch-all -> Gmail (Cloudflare)
@@ -41,6 +42,7 @@ Layout de chaves adotado: **`{env}/{módulo}/terraform.tfstate`** — ex.:
 
 ```
 prod/oci/tfstate-backend/terraform.tfstate
+prod/oci/email-delivery/terraform.tfstate
 prod/landing-page/terraform.tfstate
 prod/cloudflare/email-routing/terraform.tfstate
 ```
@@ -115,6 +117,70 @@ bloco `env` dos dois workflows.
 | `<módulo>/env/terraform.tfvars` | Valores de variáveis para uso local (`-var-file`) |
 | `oci/tfstate-backend/env/backend.env` | `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` do backend |
 | `~/.oci/ecolchain_terraform.pem` | API key OCI (chmod 600) |
+
+## E-mail transacional (OCI Email Delivery)
+
+Módulo `infra/terraform/oci/email-delivery` (state
+`prod/oci/email-delivery/terraform.tfstate`). Habilita o envio de e-mails da
+app (ex.: código de verificação de cadastro da `ecolchain-management-api`)
+pelo OCI Email Delivery, com remetente `ecolchain@ecolchain.com`, região
+`sa-saopaulo-1`.
+
+| Recurso | O que é |
+|---|---|
+| `oci_email_email_domain.ecolchain` | Email Domain `ecolchain.com` |
+| `oci_email_dkim.ecolchain` + `cloudflare_dns_record.dkim` | Assinatura DKIM; CNAME criado no Cloudflare (DNS only) |
+| `oci_email_sender.ecolchain` | Approved Sender `ecolchain@ecolchain.com` — o `From` das mensagens precisa ser exatamente esse |
+| `oci_identity_smtp_credential.app` | Usuário/senha SMTP gerados pela OCI, no usuário do Terraform |
+
+Não exige secrets novas: usa as mesmas `TF_VAR_*` dos outros módulos
+(OCI + Cloudflare). Todas as variáveis novas têm default (`email_domain`,
+`sender_email`, `dkim_selector`, `smtp_credential_description`; também
+`region`, `private_key_path`, `cloudflare_email`, `cloudflare_zone_id`).
+Como no resto do repo, `tenancy_ocid`, `user_ocid`, `fingerprint` e
+`cloudflare_api_key` **não** têm default (vêm das GitHub Secrets ou do
+`env/terraform.tfvars` local).
+
+### Obter as credenciais SMTP (para a app)
+
+```bash
+set -a; source infra/terraform/oci/tfstate-backend/env/backend.env; set +a   # backend.env nao tem "export": set -a exporta para o terraform
+terraform -chdir=infra/terraform/oci/email-delivery init -input=false
+terraform -chdir=infra/terraform/oci/email-delivery output smtp_endpoint    # quarkus.mailer.host
+terraform -chdir=infra/terraform/oci/email-delivery output smtp_port        # 465 (TLS implícito)
+terraform -chdir=infra/terraform/oci/email-delivery output -raw smtp_username
+terraform -chdir=infra/terraform/oci/email-delivery output -raw smtp_password
+```
+
+Como configurar a app: seção "Envio de e-mail" do README da
+`ecolchain-management-api`.
+
+### Pontos de atenção
+
+- **Primeiro apply**: o DKIM nasce `NEEDS_ATTENTION` e vira `ACTIVE` quando a
+  OCI valida o CNAME (alguns minutos); acompanhe em Developer Services ->
+  Email Delivery -> Email Domains -> ecolchain.com. Approved Sender
+  recém-criado também pode demorar a ficar utilizável: se o SMTP responder
+  `535 Authorization failed: address not authorized`, fazer retry com backoff.
+- **SPF/DMARC não são alterados**: o SPF do apex (`v=spf1
+  include:_spf.reach.hostinger.com include:_spf.mx.cloudflare.net ~all`) e o
+  `_dmarc` (`v=DMARC1; p=none`) existem fora do Terraform. Por padrão o Email
+  Delivery usa Return-Path próprio, então o DMARC passa pelo DKIM alinhado.
+  Para pedir aumento de limite à Oracle, SPF e DKIM são exigidos: nesse caso
+  adicionar `include:rp.oracleemaildelivery.com` ao SPF do apex (cuidado com
+  o limite de 10 lookups DNS).
+- **Limites atuais da tenancy** (verificados com `oci limits value list
+  --service-name email-delivery`): 200 e-mails/24h, 10 e-mails/min, mensagem
+  de até ~2 MB, 2000 approved senders.
+- E-mails enviados **para** `ecolchain@ecolchain.com` continuam no catch-all
+  do Cloudflare Email Routing -> Gmail (módulo `cloudflare/email-routing`,
+  intocado).
+- **Rotação da senha SMTP**: `terraform apply
+  -replace=oci_identity_smtp_credential.app` rodando local (ver "Uso local");
+  cada usuário tem no máximo 2 credenciais SMTP; a senha só é retornada na
+  criação e fica no state; atualizar a app com o novo valor.
+- A key do módulo começa com `prod/`, então o CD aplica no job do environment
+  `prod` com aprovação manual.
 
 ## Como alterar recursos existentes
 
