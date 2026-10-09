@@ -18,8 +18,13 @@ infra/
     ├── core-web/
     │   ├── prod/               # app.ecolchain.com (bucket OCI + worker Cloudflare)
     │   └── dev/                # app-dev-tester.ecolchain.com (Basic Auth)
+    ├── management-api/         # Dados da API de gestão (ADB + bucket de documentos)
+    ├── management-web/
+    │   ├── prod/               # manage.ecolchain.com (bucket OCI + worker Cloudflare)
+    │   └── dev/                # manage-dev.ecolchain.com (Basic Auth)
     └── modules/
-        └── web-hosting/        # Modulo reutilizavel (bucket OCI + worker + dominio)
+        ├── web-hosting/        # Modulo reutilizavel (bucket OCI + worker + dominio)
+        └── management-api-data/ # Dados da management-api (ADB, schemas, bucket docs)
 ```
 
 Cada pasta com `backend.tf` é um **módulo raiz** com state próprio. A esteira
