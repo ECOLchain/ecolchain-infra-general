@@ -89,7 +89,7 @@ resource "oci_load_balancer_load_balancer_routing_policy" "hostnames" {
 
   rules {
     name      = "dev"
-    condition = "HMN:${var.api_dev_hostname}"
+    condition = "any(http.request.headers[(i 'host')] eq (i '${var.api_dev_hostname}'))"
 
     actions {
       name             = "FORWARD_TO_BACKENDSET"
@@ -99,7 +99,7 @@ resource "oci_load_balancer_load_balancer_routing_policy" "hostnames" {
 
   rules {
     name      = "prod"
-    condition = "HMN:${var.api_prod_hostname}"
+    condition = "any(http.request.headers[(i 'host')] eq (i '${var.api_prod_hostname}'))"
 
     actions {
       name             = "FORWARD_TO_BACKENDSET"
