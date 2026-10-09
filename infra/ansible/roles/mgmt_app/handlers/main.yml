@@ -1,0 +1,14 @@
+- name: Daemon-reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: Enable mgmt-pull.timer
+  ansible.builtin.systemd:
+    name: mgmt-pull.timer
+    enabled: true
+    state: started
+
+- name: Refresh das imagens mgmt-api
+  ansible.builtin.systemd:
+    name: mgmt-pull.service
+    state: started

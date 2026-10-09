@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# Polling do OCIR (deploy convergente): login -> pull -> up por serviço.
+# Gerenciado por Ansible; roda via systemd timer (mgmt-pull.timer) a cada 2 min.
+set -euo pipefail
+cd "{{ app_dir }}"
+REGISTRY="{{ ocir_registry }}"
+
+login_ocir() {
+  # 1) Instance principal: pede token temporário ao OCIR assinado pela identidade da VM
+  #    (dynamic group + "read repos in tenancy"). Nenhuma credencial persistida.
+  local token
+  token=$(oci raw-request --auth instance_principal --http-method GET \
+    --endpoint "https://${REGISTRY}/20180419/docker/token" 2>/dev/null \
+    | python3 -c 'import json,sys
+try:
+    print(json.load(sys.stdin)["data"]["token"])
+except Exception:
+    pass' 2>/dev/null || true)
+  if [ -n "${token:-}" ]; then
+    printf '%s' "$token" | docker login "$REGISTRY" --username BEARER_TOKEN --password-stdin >/dev/null
+    return 0
+  fi
+  # 2) Fallback: auth token do usuário TF, entregue pelo Ansible
+  if [ -n "{{ ocir_static_token | default('') }}" ]; then
+    printf '%s' '{{ ocir_static_token }}' | docker login "$REGISTRY" --username '{{ ocir_static_user }}' --password-stdin >/dev/null
+  fi
+}
+
+login_ocir || echo "::warn: login OCIR falhou nesta passagem"
+
+for svc in $(docker compose config --services); do
+  if docker compose pull --quiet "$svc" 2>/dev/null; then
+    docker compose up -d --no-deps "$svc"
+  else
+    echo "skip ${svc}: imagem indisponível ou sem credencial"
+  fi
+done

@@ -1,0 +1,11 @@
+# Self-hosted runner opcional (não entra no site.yml default).
+# O deploy da API não depende dele — converge por polling do OCIR.
+# Uso: ansible-playbook -i "<ip>," -u opc --private-key <key> \
+#   -e runner_url=https://github.com/ECOLchain/ecolchain-management-api \
+#   -e runner_token=<token-gerado-em-Actions>Runners> playbooks/runner.yml
+- name: Self-hosted runner na VM da management-api
+  hosts: all
+  become: true
+  gather_facts: true
+  roles:
+    - runner

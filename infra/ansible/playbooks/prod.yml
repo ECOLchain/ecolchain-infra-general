@@ -1,0 +1,5 @@
+# Provisiona apenas o ambiente prod (env/api-prod.env + container api-prod).
+- ansible.builtin.import_playbook: site.yml
+  vars:
+    mgmt_envs:
+      - prod

@@ -1,0 +1,91 @@
+# App: layout /opt/mgmt-api (compose + env files + timer de polling do OCIR).
+- name: Diretórios da app
+  ansible.builtin.file:
+    path: "{{ app_dir }}/{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - ""
+    - env
+    - bin
+
+- name: compose.yml (serviços dos ambientes selecionados em mgmt_envs)
+  ansible.builtin.template:
+    src: compose.yml.j2
+    dest: "{{ app_dir }}/compose.yml"
+    mode: "0644"
+  notify: Refresh das imagens mgmt-api
+
+- name: env file do api-dev
+  ansible.builtin.template:
+    src: api.env.j2
+    dest: "{{ app_dir }}/env/api-dev.env"
+    mode: "0600"
+  when: "'dev' in mgmt_envs"
+  vars:
+    app_env: "{{ app_dev.env }}"
+  notify: Refresh das imagens mgmt-api
+
+- name: env file do api-prod
+  ansible.builtin.template:
+    src: api.env.j2
+    dest: "{{ app_dir }}/env/api-prod.env"
+    mode: "0600"
+  when: "'prod' in mgmt_envs"
+  vars:
+    app_env: "{{ app_prod.env }}"
+  notify: Refresh das imagens mgmt-api
+
+- name: script de polling do OCIR
+  ansible.builtin.template:
+    src: refresh-images.sh.j2
+    dest: "{{ app_dir }}/bin/refresh-images.sh"
+    mode: "0755"
+
+- name: systemd unit do refresh
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/mgmt-pull.service
+    mode: "0644"
+    content: |
+      [Unit]
+      Description=mgmt-api: pull de imagens OCIR + docker compose up
+      After=docker.service network-online.target
+      Requires=docker.service
+      Wants=network-online.target
+
+      [Service]
+      Type=oneshot
+      ExecStart={{ app_dir }}/bin/refresh-images.sh
+
+- name: systemd timer do refresh (a cada 2 min)
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/mgmt-pull.timer
+    mode: "0644"
+    content: |
+      [Unit]
+      Description=Polling do OCIR para novas imagens da management-api
+
+      [Timer]
+      OnBootSec=90s
+      OnUnitActiveSec=2min
+      Unit=mgmt-pull.service
+
+      [Install]
+      WantedBy=timers.target
+  notify:
+    - Daemon-reload systemd
+    - Enable mgmt-pull.timer
+
+- name: Smoke local — /q/health dos ambientes provisionados
+  ansible.builtin.uri:
+    url: "http://localhost:{{ item.port }}/q/health"
+    status_code: 200
+  register: health
+  retries: 30
+  delay: 10
+  until: health.status == 200
+  loop: "{{ mgmt_envs | map('extract', app_by_env) | list }}"
+  vars:
+    app_by_env:
+      dev: "{{ app_dev }}"
+      prod: "{{ app_prod }}"

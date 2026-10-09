@@ -1,0 +1,12 @@
+# oci-cli na VM: usado pelo refresh-images.sh para pedir um token temporário
+# ao OCIR autenticado via instance principal (dynamic group + read repos).
+- name: Instalar python3-pip
+  ansible.builtin.dnf:
+    name: python3-pip
+    state: present
+
+- name: Instalar oci-cli
+  ansible.builtin.pip:
+    name: oci-cli
+    state: present
+    executable: pip3
