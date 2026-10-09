@@ -12,19 +12,23 @@
     enabled: true
     state: started
 
-# Portas da app abertas apenas para a VCN (o LB mora na mesma VCN);
+# Porta da app aberta apenas para a VCN (o LB mora na mesma VCN);
 # o mundo externo só enxerga o LB :443 (subnet) e o SSH :22 (default zone).
 # firewall-cmd direto — sem depender de collection galaxy (ansible.posix).
-- name: Checar regra firewalld das portas da app
+# A rich rule precisa ser um único argumento quotado; `command` não faz
+# shell, então o apply vai por `shell` (&& reload).
+- name: Checar regra firewalld da porta da app
   ansible.builtin.command:
-    cmd: "firewall-cmd --permanent --query-rich-rule=rule family=ipv4 source address={{ vcn_cidr }} port port={{ app_dev.port }}-{{ app_prod.port }} protocol=tcp accept"
+    cmd: "firewall-cmd --permanent --query-rich-rule='rule family=\"ipv4\" source address=\"{{ vcn_cidr }}\" port port=\"{{ mgmt_app_port }}\" protocol=\"tcp\" accept'"
   register: fw_app_rule
   changed_when: false
   failed_when: false
 
-- name: Aplicar regra firewalld das portas da app
-  ansible.builtin.command:
-    cmd: "firewall-cmd --permanent --add-rich-rule=rule family=ipv4 source address={{ vcn_cidr }} port port={{ app_dev.port }}-{{ app_prod.port }} protocol=tcp accept && firewall-cmd --reload"
+- name: Aplicar regra firewalld da porta da app
+  ansible.builtin.shell: |
+    firewall-cmd --permanent --add-rich-rule='rule family="ipv4" source address="{{ vcn_cidr }}" port port="{{ mgmt_app_port }}" protocol="tcp" accept' && firewall-cmd --reload
+  args:
+    executable: /bin/bash
   when: fw_app_rule.rc != 0
 
 - name: SSH sem autenticação por senha
