@@ -155,10 +155,17 @@ jobs:
           PROD_IP=$(terraform -chdir="$RUNTIME_DIR" output -raw vm_prod_public_ip)
           echo "VM dev: $DEV_IP | VM prod: $PROD_IP"
 
+          # Espera real de SSH (banner+auth): nc -z passa mesmo com sshd
+          # faminto de CPU no boot do Micro — o probe falha no banner.
           for ip in "$DEV_IP" "$PROD_IP"; do
-            for i in $(seq 1 30); do
-              nc -z "$ip" 22 && break || sleep 10
+            ok=""
+            for i in $(seq 1 60); do
+              if ssh -i "$KEY" -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=no "opc@$ip" true 2>/dev/null; then
+                ok=1; echo "SSH ok em $ip (tentativa $i)"; break
+              fi
+              sleep 15
             done
+            [ -n "$ok" ] || { echo "WARN: SSH nao respondeu em $ip apos 15min"; }
           done
 
           export ANSIBLE_CONFIG=infra/ansible/ansible.cfg
