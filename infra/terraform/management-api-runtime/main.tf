@@ -208,8 +208,9 @@ data "oci_identity_availability_domains" "this" {
 }
 
 resource "oci_core_instance" "api" {
-  compartment_id      = local.compartment_id
-  availability_domain = data.oci_identity_availability_domains.this.availability_domains[0].name
+  compartment_id = local.compartment_id
+  # AD parametrizado: A1.Flex esgota capacidade por AD; troque via -var vm_ad_index=N.
+  availability_domain = data.oci_identity_availability_domains.this.availability_domains[var.vm_ad_index].name
   display_name        = "mgmt-api-vm"
   shape               = "VM.Standard.A1.Flex"
 
