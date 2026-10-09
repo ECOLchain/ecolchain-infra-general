@@ -76,8 +76,8 @@ variable "documents_buckets" {
   description = "Buckets do Object Storage para documentos, por ambiente"
   type        = map(string)
   default = {
-    dev  = "ecolchain-api-docs-dev"
-    prod = "ecolchain-api-docs-prod"
+    dev  = "ecolchain-bucket-docs-dev"
+    prod = "ecolchain-bucket-docs-prod"
   }
 }
 
