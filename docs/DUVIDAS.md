@@ -114,3 +114,26 @@ adotada em cada uma (checkbox = ponto que valeria revisão futura).
   menos overhead de memória em containers pequenos).
 - [ ] **Ansible roda 2x no job de apply** — mesma `site.yml` com
   `mgmt_envs` filtrado por VM (`["dev"]`/`["prod"]`).
+
+## Provisionamento Ansible nas VMs Micro — gotchas encontrados (2026-10-09)
+
+- [ ] **dnf OOM-kill (rc -9) na 1GB** — resolvido com swapfile 1.5G em
+  `pre_tasks` (site.yml) antes de qualquer dnf. Linha em /etc/fstab p/
+  persistir.
+- [ ] **"Transaction test error: package X already installed"** — corrida
+  anterior do dnf morreu no meio; `rpm -q` guard nos installs (firewalld,
+  dnf-automatic, yum-utils, docker-ce*, python3-pip).
+- [ ] **`command` não interpreta `&&`** — apply da rich rule do firewalld
+  usa `shell`; a rule inteira vai num único argumento quotado
+  (`--add-rich-rule='rule ...'`). `nc -z` no :22 passa mesmo com sshd
+  faminto — o apply job agora faz probe SSH real (banner+auth, até 15min).
+- [ ] **Smoke local /q/health é não-fatal** — no 1º provisionamento a tag
+  `:dev`/`:prod` ainda não existe no OCIR; o mgmt-pull.timer sobe o
+  container quando a esteira da API publicar a 1ª imagem.
+- [ ] **Ansible step depende de módulo terraform detectado** — mudanças em
+  `infra/ansible/**` agora marcam `management-api-runtime` no
+  detect-changed-modules.sh (apply vira no-op, Ansible re-roda). Mudanças
+  só em `.github/` não disparam nada.
+- [ ] **Squash-merge + mesma linha final** — comentário "# Trigger" no fim
+  de main.tf conflita a cada merge (mesma linha tocada por branches
+  concorrentes); resolve com rebase + reescrever a linha.
