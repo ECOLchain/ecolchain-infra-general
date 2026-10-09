@@ -18,6 +18,12 @@ variable "db_name" {
   type        = string
 }
 
+variable "adb_allowed_ips" {
+  description = "ACL de IPs/CIDRs do ADB — obrigatória para one-way TLS (sem wallet). 0.0.0.0/0 libera geral"
+  type        = list(string)
+  default     = ["0.0.0.0/0"]
+}
+
 variable "db_admin_password" {
   description = "Senha do usuário ADMIN do ADB (12-30 chars, maiúscula + minúscula + dígito)"
   type        = string
