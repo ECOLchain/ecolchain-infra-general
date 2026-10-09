@@ -155,6 +155,27 @@ terraform -chdir=infra/terraform/oci/email-delivery output -raw smtp_password
 Como configurar a app: seção "Envio de e-mail" do README da
 `ecolchain-management-api`.
 
+### Outputs atuais (prod)
+
+Valores do apply em prod (08/10/2026); sem secrets. `smtp_username` (contém
+OCIDs) e `smtp_password` saem só via `terraform output -raw` e **não** devem
+ser commitados.
+
+| Output | Valor | Uso na app |
+|---|---|---|
+| `smtp_endpoint` | `smtp.email.sa-saopaulo-1.oci.oraclecloud.com` | `quarkus.mailer.host` |
+| `smtp_port` | `465` (TLS implícito) | `quarkus.mailer.port` + `quarkus.mailer.tls=true` |
+| `sender_email` | `ecolchain@ecolchain.com` | `quarkus.mailer.from` |
+| `smtp_username` | sensível (ver comando acima: `terraform output -raw smtp_username`) | `QUARKUS_MAILER_USERNAME` |
+| `smtp_password` | sensível (`terraform output -raw smtp_password`) | `QUARKUS_MAILER_PASSWORD` |
+| `dkim_cname` | `ecolchain-gru-20261008._domainkey.ecolchain.com` -> `ecolchain-gru-20261008.ecolchain.com.dkim.gru1.oracleemaildelivery.com` | criado pelo módulo no Cloudflare (DNS only) |
+| `dkim_state` | `ACTIVE` (o output só reflete o último apply/refresh; o log do apply mostrou `NEEDS_ATTENTION` até a OCI validar o CNAME) | - |
+| `email_domain_id` | `ocid1.emaildomain.oc1.sa-saopaulo-1.amaaaaaavyhgtvaa4vqciragts3aoaei6psq5phwano2s5pzqyjf2jrrcdqa` | - |
+
+Verificação pós-apply (08/10/2026): Email Domain, DKIM e Approved Sender em
+`ACTIVE` (OCI CLI); CNAME do DKIM resolvendo até a OCI (`dig`); envio de
+teste por SMTP (465/TLS) aceito pelo servidor (`250 Ok`).
+
 ### Pontos de atenção
 
 - **Primeiro apply**: o DKIM nasce `NEEDS_ATTENTION` e vira `ACTIVE` quando a
