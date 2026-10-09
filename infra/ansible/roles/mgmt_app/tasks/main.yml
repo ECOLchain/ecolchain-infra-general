@@ -76,6 +76,9 @@
     - Daemon-reload systemd
     - Enable mgmt-pull.timer
 
+# Smoke é informativo: no primeiro provisionamento a imagem ainda não
+# existe no OCIR (o 1º build vem da esteira da API) — nesse caso o
+# container sobe quando o mgmt-pull.timer trouxer a tag. Não fatal.
 - name: Smoke local — /q/health dos ambientes provisionados
   ansible.builtin.uri:
     url: "http://localhost:{{ item.port }}/q/health"
@@ -84,8 +87,15 @@
   retries: 30
   delay: 10
   until: health.status == 200
+  failed_when: false
   loop: "{{ mgmt_envs | map('extract', app_by_env) | list }}"
   vars:
     app_by_env:
       dev: "{{ app_dev }}"
       prod: "{{ app_prod }}"
+
+- name: Aviso quando a app ainda não responde (imagem pendente no OCIR)
+  ansible.builtin.debug:
+    msg: "WARN: {{ item.item.service_name }} não respondeu /q/health — normal se a imagem ainda não foi publicada; o mgmt-pull.timer fará up quando ela chegar."
+  when: (item.status | default(0)) != 200
+  loop: "{{ health.results | default([]) }}"
