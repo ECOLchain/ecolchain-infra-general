@@ -49,6 +49,11 @@ resource "cloudflare_workers_script" "front" {
       type = "plain_text"
       text = local.bucket_base_url
     }],
+    var.html_routes ? [{
+      name = "HTML_ROUTES"
+      type = "plain_text"
+      text = "1"
+    }] : [],
     var.basic_auth != "" ? [{
       name = "DEV_AUTH"
       type = "secret_text"

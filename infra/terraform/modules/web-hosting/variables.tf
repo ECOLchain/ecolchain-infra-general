@@ -46,3 +46,9 @@ variable "worker_name_prefix" {
   type        = string
   default     = "ecolchain-web"
 }
+
+variable "html_routes" {
+  description = "Rotas sem extensao sao servidas de <rota>.html ou <rota>/index.html (export estatico estilo Next out/) antes do fallback no index raiz"
+  type        = bool
+  default     = false
+}
