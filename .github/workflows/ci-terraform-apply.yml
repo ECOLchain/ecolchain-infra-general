@@ -135,8 +135,12 @@ jobs:
       - name: Provisionar VM via Ansible (management-api-runtime)
         run: |
           RUNTIME_DIR="infra/terraform/management-api-runtime"
-          if ! grep -qx "$RUNTIME_DIR" "$RUNNER_TEMP/applied-dirs.txt"; then
-            echo "Modulo $RUNTIME_DIR nao foi aplicado nesta rodada - skip"
+          ANSIBLE_CHANGED=0
+          BEFORE="${{ github.event.before }}"
+          { [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; } && BEFORE="HEAD~1"
+          git diff --name-only "$BEFORE" "${{ github.sha }}" 2>/dev/null | grep -q '^infra/ansible/' && ANSIBLE_CHANGED=1
+          if ! grep -qx "$RUNTIME_DIR" "$RUNNER_TEMP/applied-dirs.txt" && [ "$ANSIBLE_CHANGED" != 1 ]; then
+            echo "Modulo $RUNTIME_DIR nao aplicado e Ansible sem mudanca - skip"
             exit 0
           fi
 

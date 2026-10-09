@@ -23,6 +23,28 @@
       changed_when: false
       failed_when: false
 
+    # VMs E2.1.Micro (1GB): sem swap o dnf é OOM-killed (rc -9) na
+    # resolução de dependências. Cria swapfile antes de qualquer dnf.
+    - name: Garantir swap de 1.5G (VM Micro tem ~1GB RAM)
+      ansible.builtin.shell: |
+        if ! swapon --show=NAME --noheadings | grep -qx /swapfile; then
+          rm -f /swapfile
+          fallocate -l 1536M /swapfile &&
+          chmod 600 /swapfile &&
+          mkswap /swapfile &&
+          swapon /swapfile
+        fi
+      args:
+        executable: /bin/bash
+      register: swap_out
+      changed_when: swap_out.stdout is search("swapspace")
+
+    - name: Persistir swap no fstab
+      ansible.builtin.lineinfile:
+        path: /etc/fstab
+        line: "/swapfile none swap sw 0 0"
+        regexp: ^/swapfile\s
+
   roles:
     - hardening
     - docker
