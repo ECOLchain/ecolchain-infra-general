@@ -297,4 +297,4 @@ resource "random_password" "otp_pepper" {
   length  = 32
   special = false
 }
-# Trigger: re-run Ansible (ssh retries no ansible.cfg)
+# Trigger: run Ansible nas 2 VMs (ansible.cfg ok, VMs criadas)
