@@ -31,6 +31,12 @@ variable "db_name" {
   default     = "ecolmgmt"
 }
 
+variable "adb_allowed_ips" {
+  description = "ACL de IPs/CIDRs permitidos no ADB. 0.0.0.0/0 libera geral — restringir quando o app tiver IP fixo"
+  type        = list(string)
+  default     = ["0.0.0.0/0"]
+}
+
 # TODO: credenciais em plaintext por decisão do time. Quando quiserem virar
 # secret: gh secret set + TF_VAR_<name> nos dois workflows em .github/workflows/
 variable "db_admin_password" {

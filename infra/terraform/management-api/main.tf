@@ -24,6 +24,7 @@ module "data" {
   user_ocid                = var.user_ocid
   region                   = var.region
   db_name                  = var.db_name
+  adb_allowed_ips          = var.adb_allowed_ips
   db_admin_password        = var.db_admin_password
   schema_username_dev      = var.schema_username_dev
   schema_username_prod     = var.schema_username_prod

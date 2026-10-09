@@ -20,6 +20,7 @@ resource "oci_database_autonomous_database" "this" {
 
   is_free_tier                = true
   is_mtls_connection_required = false
+  whitelisted_ips             = var.adb_allowed_ips
   admin_password              = var.db_admin_password
 
   freeform_tags = {
