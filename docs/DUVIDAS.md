@@ -95,3 +95,22 @@ adotada em cada uma (checkbox = ponto que valeria revisão futura).
 - [ ] **Bot não pode re-rodar job de apply** (`gh run rerun` = 403) —
   retry do apply acontece via novo merge em main que toque o diretório
   do módulo (detect-changed-modules inclui por diff).
+
+## Pivot de compute: A1.Flex (ARM) -> 2x E2.1.Micro (x86) — 2026-10-09
+
+- [ ] **`Out of host capacity` crônico no A1.Flex** — 4 retries pelo CD
+  falharam; GRU tem 1 único AD (`availability_domains` = 1 elemento).
+  Decisão do dono: pivotar p/ 2x `VM.Standard.E2.1.Micro` (AMD x86,
+  também Always Free) — `mgmt-api-vm-dev` e `mgmt-api-vm-prod`, 1 GB
+  RAM cada, 1 container por VM. `vm_shape` virou variável; voltar p/
+  ARM = `-var vm_shape=VM.Standard.A1.Flex` + imagem arm64 + count.
+- [ ] **2 VMs em vez de 1** — E2.1.Micro é fixo (sem shape_config;
+  bloco virou `dynamic` condicionado ao shape Flex). Ambas as VMs no
+  mesmo dynamic group (`ANY{instance.id=...}`) e mesmo NSG.
+- [ ] **Imagem da app passa a ser linux/amd64** — workflows da API
+  ajustados; Dockerfile continua multi-stage com `$BUILDPLATFORM`.
+- [ ] **Tuning JVM p/ 1 GB**: `JAVA_MAX_MEM_RATIO=70` +
+  `GC_CONTAINER_OPTIONS=-XX:+UseSerialGC` nos env files (SerialGC tem
+  menos overhead de memória em containers pequenos).
+- [ ] **Ansible roda 2x no job de apply** — mesma `site.yml` com
+  `mgmt_envs` filtrado por VM (`["dev"]`/`["prod"]`).

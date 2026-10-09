@@ -57,14 +57,14 @@ resource "oci_load_balancer_backend_set" "api_prod" {
 resource "oci_load_balancer_backend" "api_dev" {
   load_balancer_id = oci_load_balancer_load_balancer.api.id
   backendset_name  = oci_load_balancer_backend_set.api_dev.name
-  ip_address       = oci_core_instance.api.private_ip
+  ip_address       = oci_core_instance.dev.private_ip
   port             = var.app_dev_port
 }
 
 resource "oci_load_balancer_backend" "api_prod" {
   load_balancer_id = oci_load_balancer_load_balancer.api.id
   backendset_name  = oci_load_balancer_backend_set.api_prod.name
-  ip_address       = oci_core_instance.api.private_ip
+  ip_address       = oci_core_instance.prod.private_ip
   port             = var.app_prod_port
 }
 

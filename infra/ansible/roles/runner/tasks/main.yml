@@ -15,9 +15,13 @@
     home: /opt/actions-runner
     create_home: true
 
-- name: Baixar actions runner linux/arm64
+- name: Descobrir arquitetura do runner
+  ansible.builtin.set_fact:
+    runner_arch: "{{ 'arm64' if ansible_architecture in ['aarch64', 'arm64'] else 'x64' }}"
+
+- name: Baixar actions runner
   ansible.builtin.get_url:
-    url: "https://github.com/actions/runner/releases/download/v{{ runner_version | default('2.328.0') }}/actions-runner-linux-arm64-{{ runner_version | default('2.328.0') }}.tar.gz"
+    url: "https://github.com/actions/runner/releases/download/v{{ runner_version | default('2.328.0') }}/actions-runner-linux-{{ runner_arch }}-{{ runner_version | default('2.328.0') }}.tar.gz"
     dest: /tmp/actions-runner.tar.gz
     mode: "0644"
 

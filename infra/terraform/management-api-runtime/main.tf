@@ -185,7 +185,11 @@ resource "oci_core_network_security_group_security_rule" "vm_egress" {
 }
 
 # ------------------------------------------------------------------
-# Compute — 1 VM A1.Flex serve os dois ambientes (free tier).
+# Compute — 2 VMs E2.1.Micro (AMD x86, Always Free: 2 VMs grátis),
+# uma por ambiente: mgmt-api-vm-dev roda o container api-dev e
+# mgmt-api-vm-prod roda api-prod. 1 GB RAM cada — container único
+# por VM. Shape parametrizado: voltar p/ A1.Flex (ARM) é trocar var
+# + contar; ver docs/DUVIDAS.md.
 # SSH: par gerado pelo Terraform; a private key fica só no state e
 # sai via `terraform output -raw ssh_private_key` (usada pelo CD/Ansible).
 # ------------------------------------------------------------------
@@ -194,11 +198,11 @@ resource "tls_private_key" "ssh" {
   rsa_bits  = 4096
 }
 
-data "oci_core_images" "ol9_arm" {
+data "oci_core_images" "this" {
   compartment_id           = local.compartment_id
   operating_system         = "Oracle Linux"
   operating_system_version = "9"
-  shape                    = "VM.Standard.A1.Flex"
+  shape                    = var.vm_shape
   sort_by                  = "TIMECREATED"
   sort_order               = "DESC"
 }
@@ -207,27 +211,31 @@ data "oci_identity_availability_domains" "this" {
   compartment_id = local.compartment_id
 }
 
-resource "oci_core_instance" "api" {
-  compartment_id = local.compartment_id
-  # AD parametrizado: A1.Flex esgota capacidade por AD; troque via -var vm_ad_index=N.
+# A1.Flex aceita shape_config (ocpus/memoria); shapes fixed (E2.1.Micro)
+# rejeitam o bloco — so entra quando o shape for Flex.
+resource "oci_core_instance" "dev" {
+  compartment_id      = local.compartment_id
   availability_domain = data.oci_identity_availability_domains.this.availability_domains[var.vm_ad_index].name
-  display_name        = "mgmt-api-vm"
-  shape               = "VM.Standard.A1.Flex"
+  display_name        = "mgmt-api-vm-dev"
+  shape               = var.vm_shape
 
-  shape_config {
-    ocpus         = var.vm_ocpus
-    memory_in_gbs = var.vm_memory_gbs
+  dynamic "shape_config" {
+    for_each = var.vm_shape == "VM.Standard.A1.Flex" ? [1] : []
+    content {
+      ocpus         = var.vm_ocpus
+      memory_in_gbs = var.vm_memory_gbs
+    }
   }
 
   source_details {
     source_type = "image"
-    source_id   = data.oci_core_images.ol9_arm.images[0].id
+    source_id   = data.oci_core_images.this.images[0].id
   }
 
   create_vnic_details {
     subnet_id        = oci_core_subnet.public.id
     assign_public_ip = true
-    hostname_label   = "mgmt-api-vm"
+    hostname_label   = "mgmt-api-vm-dev"
     nsg_ids          = [oci_core_network_security_group.vm.id]
   }
 
@@ -235,7 +243,46 @@ resource "oci_core_instance" "api" {
     ssh_authorized_keys = tls_private_key.ssh.public_key_openssh
     user_data = base64encode(<<-EOT
       #cloud-config
-      hostname: mgmt-api-vm
+      hostname: mgmt-api-vm-dev
+      prefer_fqdn_over_hostname: false
+      # Provisionamento real fica com o Ansible (infra/ansible), disparado
+      # pelo job de apply do CD via SSH. Cloud-init propositalmente mínimo.
+    EOT
+    )
+  }
+}
+
+resource "oci_core_instance" "prod" {
+  compartment_id      = local.compartment_id
+  availability_domain = data.oci_identity_availability_domains.this.availability_domains[var.vm_ad_index].name
+  display_name        = "mgmt-api-vm-prod"
+  shape               = var.vm_shape
+
+  dynamic "shape_config" {
+    for_each = var.vm_shape == "VM.Standard.A1.Flex" ? [1] : []
+    content {
+      ocpus         = var.vm_ocpus
+      memory_in_gbs = var.vm_memory_gbs
+    }
+  }
+
+  source_details {
+    source_type = "image"
+    source_id   = data.oci_core_images.this.images[0].id
+  }
+
+  create_vnic_details {
+    subnet_id        = oci_core_subnet.public.id
+    assign_public_ip = true
+    hostname_label   = "mgmt-api-vm-prod"
+    nsg_ids          = [oci_core_network_security_group.vm.id]
+  }
+
+  metadata = {
+    ssh_authorized_keys = tls_private_key.ssh.public_key_openssh
+    user_data = base64encode(<<-EOT
+      #cloud-config
+      hostname: mgmt-api-vm-prod
       prefer_fqdn_over_hostname: false
       # Provisionamento real fica com o Ansible (infra/ansible), disparado
       # pelo job de apply do CD via SSH. Cloud-init propositalmente mínimo.
