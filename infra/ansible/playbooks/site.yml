@@ -9,6 +9,8 @@
     mgmt_envs:
       - dev
       - prod
+    # 1 env por VM: porta da app aberta no firewall = a do env ativo.
+    mgmt_app_port: "{{ app_dev.port if 'dev' in mgmt_envs else app_prod.port }}"
 
   pre_tasks:
     - name: Instalar python3 (imagem OL9 já traz, mas garante)
