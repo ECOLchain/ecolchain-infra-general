@@ -83,6 +83,12 @@ variable "ssh_ingress_cidr" {
   default     = "0.0.0.0/0"
 }
 
+variable "vm_shape" {
+  description = "Shape das VMs. Default E2.1.Micro (x86, Always Free x2); A1.Flex (ARM) exige imagem arm64 + capacidade"
+  type        = string
+  default     = "VM.Standard.E2.1.Micro"
+}
+
 variable "vm_ad_index" {
   description = "Indice do availability domain (0..N) - trocar quando o AD atual estiver sem capacidade A1.Flex"
   type        = number
@@ -108,9 +114,9 @@ variable "app_dev_port" {
 }
 
 variable "app_prod_port" {
-  description = "Porta do container api-prod na VM"
+  description = "Porta do container api-prod na VM prod"
   type        = number
-  default     = 8081
+  default     = 8080
 }
 
 variable "api_data_state_key" {

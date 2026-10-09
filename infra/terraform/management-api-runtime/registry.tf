@@ -35,7 +35,7 @@ resource "oci_identity_dynamic_group" "vm" {
   compartment_id = local.compartment_id
   name           = "mgmt-api-runtime-vm"
   description    = "VM do runtime da management-api (instance principal)"
-  matching_rule  = "ALL {instance.id = '${oci_core_instance.api.id}'}"
+  matching_rule  = "ANY {instance.id = '${oci_core_instance.dev.id}', instance.id = '${oci_core_instance.prod.id}'}"
 }
 
 resource "oci_identity_policy" "vm_ocir_pull" {

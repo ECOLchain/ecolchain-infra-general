@@ -1,11 +1,19 @@
-output "vm_public_ip" {
-  description = "IP público da VM do runtime (Ansible/SSH)"
-  value       = oci_core_instance.api.public_ip
+output "vm_dev_public_ip" {
+  description = "IP público da VM dev (Ansible/SSH)"
+  value       = oci_core_instance.dev.public_ip
 }
 
-output "vm_private_ip" {
-  description = "IP privado da VM (backend do LB)"
-  value       = oci_core_instance.api.private_ip
+output "vm_prod_public_ip" {
+  description = "IP público da VM prod (Ansible/SSH)"
+  value       = oci_core_instance.prod.public_ip
+}
+
+output "vm_private_ips" {
+  description = "IPs privados das VMs (backends do LB)"
+  value = {
+    dev  = oci_core_instance.dev.private_ip
+    prod = oci_core_instance.prod.private_ip
+  }
 }
 
 output "lb_public_ip" {
@@ -54,7 +62,6 @@ output "ansible_vars" {
   sensitive   = true
   value = {
     ssh_user      = "opc"
-    vm_hostname   = "mgmt-api-vm"
     ocir_registry = local.ocir_registry
     image_repo    = local.ocir_image_repo
     vcn_cidr      = var.vcn_cidr
@@ -70,6 +77,9 @@ output "ansible_vars" {
         QUARKUS_S3_AWS_CREDENTIALS_STATIC_PROVIDER_ACCESS_KEY_ID     = data.terraform_remote_state.api_data.outputs.s3_access_key
         QUARKUS_S3_AWS_CREDENTIALS_STATIC_PROVIDER_SECRET_ACCESS_KEY = data.terraform_remote_state.api_data.outputs.s3_secret_key
         OTP_PEPPER                                                   = random_password.otp_pepper.result
+        # Tuning p/ VM de 1 GB (E2.1.Micro): heap ~70% e SerialGC (menos overhead)
+        JAVA_MAX_MEM_RATIO   = "70"
+        GC_CONTAINER_OPTIONS = "-XX:+UseSerialGC"
       }
     }
 
@@ -84,6 +94,8 @@ output "ansible_vars" {
         QUARKUS_S3_AWS_CREDENTIALS_STATIC_PROVIDER_ACCESS_KEY_ID     = data.terraform_remote_state.api_data.outputs.s3_access_key
         QUARKUS_S3_AWS_CREDENTIALS_STATIC_PROVIDER_SECRET_ACCESS_KEY = data.terraform_remote_state.api_data.outputs.s3_secret_key
         OTP_PEPPER                                                   = random_password.otp_pepper.result
+        JAVA_MAX_MEM_RATIO                                           = "70"
+        GC_CONTAINER_OPTIONS                                         = "-XX:+UseSerialGC"
       }
     }
 

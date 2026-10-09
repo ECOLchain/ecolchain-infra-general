@@ -147,16 +147,24 @@ jobs:
           terraform -chdir="$RUNTIME_DIR" output -raw ssh_private_key > "$KEY"
           chmod 600 "$KEY"
           terraform -chdir="$RUNTIME_DIR" output -json ansible_vars > "$RUNNER_TEMP/ansible_vars.json"
-          VM_IP=$(terraform -chdir="$RUNTIME_DIR" output -raw vm_public_ip)
-          echo "VM: $VM_IP"
+          DEV_IP=$(terraform -chdir="$RUNTIME_DIR" output -raw vm_dev_public_ip)
+          PROD_IP=$(terraform -chdir="$RUNTIME_DIR" output -raw vm_prod_public_ip)
+          echo "VM dev: $DEV_IP | VM prod: $PROD_IP"
 
-          for i in $(seq 1 30); do
-            nc -z "$VM_IP" 22 && break || sleep 10
+          for ip in "$DEV_IP" "$PROD_IP"; do
+            for i in $(seq 1 30); do
+              nc -z "$ip" 22 && break || sleep 10
+            done
           done
 
           export ANSIBLE_CONFIG=infra/ansible/ansible.cfg
           cd infra/ansible
-          ansible-playbook -i "${VM_IP}," -u opc --private-key "$KEY" \
+          ansible-playbook -i "${DEV_IP}," -u opc --private-key "$KEY" \
             --extra-vars "@$RUNNER_TEMP/ansible_vars.json" \
+            --extra-vars '{"mgmt_envs": ["dev"]}' \
+            playbooks/site.yml
+          ansible-playbook -i "${PROD_IP}," -u opc --private-key "$KEY" \
+            --extra-vars "@$RUNNER_TEMP/ansible_vars.json" \
+            --extra-vars '{"mgmt_envs": ["prod"]}' \
             playbooks/site.yml
           echo "::endgroup::"
