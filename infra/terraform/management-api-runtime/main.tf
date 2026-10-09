@@ -297,4 +297,4 @@ resource "random_password" "otp_pepper" {
   length  = 32
   special = false
 }
-# Trigger: retry Ansible p/ VM prod (espera SSH real)
+# Trigger: retry Ansible p/ VM prod #2 (swap ativo)
