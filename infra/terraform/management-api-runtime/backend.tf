@@ -17,3 +17,5 @@ terraform {
     use_lockfile                = true
   }
 }
+
+# (comentario de retry - ver docs/DUVIDAS.md: apply re-tenta via merge)

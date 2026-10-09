@@ -78,3 +78,20 @@ adotada em cada uma (checkbox = ponto que valeria revisão futura).
 - [ ] **Shape conservador 1 OCPU / 8 GB** — sobra quota Always Free
   (4 OCPU/24 GB) e 2 JVMs Quarkus cabem folgadas; subir via tfvars se
   faltar memória.
+
+## Apply do runtime — erros encontrados e resolução (2026-10-09)
+
+- [ ] **Nomes de listener/routing policy sem hífen** — OCI exige
+  `^[a-zA-Z_][a-zA-Z_0-9]*$` nesses campos (display_name aceita hífen,
+  name não). `api-hostname-routing`/`https-443` viraram
+  `api_hostname_routing`/`https_443`.
+- [ ] **Condição de routing por hostname é JMESPath V1**, não `HMN:` —
+  forma correta validada no apply:
+  `any(http.request.headers[(i 'host')] eq (i '<hostname>'))`.
+- [ ] **sa-saopaulo-1 tem 1 único AD** — `vm_ad_index` só aceita 0; a
+  variável permanece para o caso de migração de região. Sem AD
+  alternativo, "Out of host capacity" do A1.Flex só resolve com retry
+  temporal (capacidade flutua).
+- [ ] **Bot não pode re-rodar job de apply** (`gh run rerun` = 403) —
+  retry do apply acontece via novo merge em main que toque o diretório
+  do módulo (detect-changed-modules inclui por diff).
