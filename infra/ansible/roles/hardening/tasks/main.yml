@@ -1,0 +1,48 @@
+# Hardening básico: firewall só com o necessário + SSH sem senha + updates de segurança.
+- name: Instalar firewalld e dnf-automatic
+  ansible.builtin.dnf:
+    name:
+      - firewalld
+      - dnf-automatic
+    state: present
+
+- name: firewalld habilitado
+  ansible.builtin.systemd:
+    name: firewalld
+    enabled: true
+    state: started
+
+# Portas da app abertas apenas para a VCN (o LB mora na mesma VCN);
+# o mundo externo só enxerga o LB :443 (subnet) e o SSH :22 (default zone).
+# firewall-cmd direto — sem depender de collection galaxy (ansible.posix).
+- name: Checar regra firewalld das portas da app
+  ansible.builtin.command:
+    cmd: "firewall-cmd --permanent --query-rich-rule=rule family=ipv4 source address={{ vcn_cidr }} port port={{ app_dev.port }}-{{ app_prod.port }} protocol=tcp accept"
+  register: fw_app_rule
+  changed_when: false
+  failed_when: false
+
+- name: Aplicar regra firewalld das portas da app
+  ansible.builtin.command:
+    cmd: "firewall-cmd --permanent --add-rich-rule=rule family=ipv4 source address={{ vcn_cidr }} port port={{ app_dev.port }}-{{ app_prod.port }} protocol=tcp accept && firewall-cmd --reload"
+  when: fw_app_rule.rc != 0
+
+- name: SSH sem autenticação por senha
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^#?PasswordAuthentication"
+    line: "PasswordAuthentication no"
+  notify: Restart sshd
+
+- name: SSH sem login de root
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^#?PermitRootLogin"
+    line: "PermitRootLogin no"
+  notify: Restart sshd
+
+- name: dnf-automatic (download de updates de segurança)
+  ansible.builtin.systemd:
+    name: dnf-automatic.timer
+    enabled: true
+    state: started

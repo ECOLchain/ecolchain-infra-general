@@ -1,0 +1,51 @@
+- name: Checar se docker já existe
+  ansible.builtin.command: command -v docker
+  register: docker_bin
+  changed_when: false
+  failed_when: false
+
+- name: Instalar yum-utils (config-manager)
+  ansible.builtin.dnf:
+    name: yum-utils
+    state: present
+  when: docker_bin.rc != 0
+
+- name: Adicionar repo docker-ce (RHEL-family)
+  ansible.builtin.command:
+    cmd: yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+    creates: /etc/yum.repos.d/docker-ce.repo
+  when: docker_bin.rc != 0
+
+- name: Instalar Docker Engine + compose plugin
+  ansible.builtin.dnf:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-buildx-plugin
+      - docker-compose-plugin
+    state: present
+  when: docker_bin.rc != 0
+
+- name: daemon.json — rotação de logs
+  ansible.builtin.copy:
+    dest: /etc/docker/daemon.json
+    mode: "0644"
+    content: |
+      {
+        "log-driver": "json-file",
+        "log-opts": { "max-size": "50m", "max-file": "3" }
+      }
+  notify: Restart docker
+
+- name: Docker habilitado
+  ansible.builtin.systemd:
+    name: docker
+    enabled: true
+    state: started
+
+- name: usuário opc no grupo docker
+  ansible.builtin.user:
+    name: opc
+    groups: docker
+    append: true

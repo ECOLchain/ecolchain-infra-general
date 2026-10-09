@@ -8,6 +8,7 @@ DNS, e-mail e hosting nos providers **OCI**, **Cloudflare** e **Vercel**.
 ```
 infra/
 ├── secret.env                  # LOCAL (gitignored) - credenciais de uso local
+├── ansible/                    # Provisioning da VM mgmt-api (ver infra/ansible/README.md)
 └── terraform/
     ├── oci/
     │   ├── tfstate-backend/    # Bucket OCI de state + Customer Secret Key (S3)
@@ -19,6 +20,7 @@ infra/
     │   ├── prod/               # app.ecolchain.com (bucket OCI + worker Cloudflare)
     │   └── dev/                # app-dev-tester.ecolchain.com (Basic Auth)
     ├── management-api/         # Dados da API de gestão (ADB + bucket de documentos)
+    ├── management-api-runtime/ # Runtime da API: VCN + VM A1.Flex + LB + OCIR + DNS api-dev/api-prod
     ├── management-web/
     │   ├── prod/               # manage.ecolchain.com (bucket OCI + worker Cloudflare)
     │   └── dev/                # manage-dev.ecolchain.com (Basic Auth)

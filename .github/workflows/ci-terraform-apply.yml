@@ -110,6 +110,7 @@ jobs:
           PROD_DIRS: ${{ needs.detect.outputs.prod_dirs }}
         run: |
           FAILED=()
+          APPLIED=()
           for dir in $(echo "$PROD_DIRS" | jq -r '.[]'); do
             echo "::group::${dir}"
             if ! ( terraform -chdir="$dir" init -input=false \
@@ -117,6 +118,8 @@ jobs:
                 && terraform -chdir="$dir" apply -input=false tfplan ); then
               FAILED+=("$dir")
               echo "::error::Falha no apply do modulo ${dir}"
+            else
+              APPLIED+=("$dir")
             fi
             echo "::endgroup::"
           done
@@ -124,3 +127,36 @@ jobs:
             echo "::error::Modulos com falha no apply: ${FAILED[*]}"
             exit 1
           fi
+          printf '%s\n' "${APPLIED[@]:-}" > "$RUNNER_TEMP/applied-dirs.txt"
+
+      # Provisionamento da VM do runtime via Ansible por SSH — roda só
+      # quando o modulo management-api-runtime acabou de aplicar. A chave
+      # SSH e as vars saem do terraform output (nada em secrets/inputs).
+      - name: Provisionar VM via Ansible (management-api-runtime)
+        run: |
+          RUNTIME_DIR="infra/terraform/management-api-runtime"
+          if ! grep -qx "$RUNTIME_DIR" "$RUNNER_TEMP/applied-dirs.txt"; then
+            echo "Modulo $RUNTIME_DIR nao foi aplicado nesta rodada - skip"
+            exit 0
+          fi
+
+          echo "::group::Ansible — provisionamento da VM"
+          python3 -m pip install --quiet -r infra/ansible/requirements.txt
+
+          KEY="$RUNNER_TEMP/mgmt_vm_key"
+          terraform -chdir="$RUNTIME_DIR" output -raw ssh_private_key > "$KEY"
+          chmod 600 "$KEY"
+          terraform -chdir="$RUNTIME_DIR" output -json ansible_vars > "$RUNNER_TEMP/ansible_vars.json"
+          VM_IP=$(terraform -chdir="$RUNTIME_DIR" output -raw vm_public_ip)
+          echo "VM: $VM_IP"
+
+          for i in $(seq 1 30); do
+            nc -z "$VM_IP" 22 && break || sleep 10
+          done
+
+          export ANSIBLE_CONFIG=infra/ansible/ansible.cfg
+          cd infra/ansible
+          ansible-playbook -i "${VM_IP}," -u opc --private-key "$KEY" \
+            --extra-vars "@$RUNNER_TEMP/ansible_vars.json" \
+            playbooks/site.yml
+          echo "::endgroup::"

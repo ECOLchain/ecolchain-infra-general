@@ -1,0 +1,56 @@
+# Self-hosted GitHub Actions runner (opcional — ver playbooks/runner.yml).
+# Fora do caminho default: o deploy converge por polling do OCIR, então
+# nenhum inbound extra é necessário. Usar só se um job precisar rodar
+# local na VM (ex.: seeds, batch). Precisa de runner_url + runner_token.
+- name: Validar variáveis obrigatórias
+  ansible.builtin.fail:
+    msg: "Defina runner_url e runner_token (token via Actions > Runners > New, TTL ~1h)"
+  when: runner_url is not defined or runner_token is not defined
+
+- name: Criar usuário do runner
+  ansible.builtin.user:
+    name: ghrunner
+    system: true
+    shell: /bin/bash
+    home: /opt/actions-runner
+    create_home: true
+
+- name: Baixar actions runner linux/arm64
+  ansible.builtin.get_url:
+    url: "https://github.com/actions/runner/releases/download/v{{ runner_version | default('2.328.0') }}/actions-runner-linux-arm64-{{ runner_version | default('2.328.0') }}.tar.gz"
+    dest: /tmp/actions-runner.tar.gz
+    mode: "0644"
+
+- name: Extrair runner
+  ansible.builtin.unarchive:
+    src: /tmp/actions-runner.tar.gz
+    dest: /opt/actions-runner
+    remote_src: true
+    owner: ghrunner
+    group: ghrunner
+
+- name: Configurar runner (unattended)
+  ansible.builtin.command:
+    cmd: >-
+      ./config.sh --unattended --replace
+      --url {{ runner_url }}
+      --token {{ runner_token }}
+      --name {{ vm_hostname | default('mgmt-api-vm') }}
+      --labels self-hosted,linux,arm64,mgmt
+      --work _work
+    chdir: /opt/actions-runner
+    creates: /opt/actions-runner/.runner
+  become_user: ghrunner
+  become: true
+
+- name: Instalar como serviço systemd
+  ansible.builtin.command:
+    cmd: ./svc.sh install ghrunner
+    chdir: /opt/actions-runner
+    creates: /etc/systemd/system/actions.runner.*.service
+  failed_when: false
+
+- name: Iniciar serviço do runner
+  ansible.builtin.command:
+    cmd: ./svc.sh start
+    chdir: /opt/actions-runner

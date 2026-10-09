@@ -1,0 +1,5 @@
+# Provisiona apenas o ambiente dev (env/api-dev.env + container api-dev).
+- ansible.builtin.import_playbook: site.yml
+  vars:
+    mgmt_envs:
+      - dev

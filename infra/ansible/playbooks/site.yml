@@ -1,0 +1,30 @@
+# Provisionamento completo da VM do runtime da management-api.
+# Disparado pelo job de apply do CD (módulo management-api-runtime) com
+# --extra-vars "@ansible_vars.json" (terraform output -json ansible_vars).
+- name: Provisionamento da VM da management-api
+  hosts: all
+  become: true
+  gather_facts: false
+  vars:
+    mgmt_envs:
+      - dev
+      - prod
+
+  pre_tasks:
+    - name: Instalar python3 (imagem OL9 já traz, mas garante)
+      ansible.builtin.raw: command -v python3 >/dev/null 2>&1 || dnf install -y python3 python3-pip
+      changed_when: false
+
+    - name: Coletar facts
+      ansible.builtin.setup:
+
+    - name: Esperar cloud-init terminar
+      ansible.builtin.command: cloud-init status --wait
+      changed_when: false
+      failed_when: false
+
+  roles:
+    - hardening
+    - docker
+    - ocir
+    - mgmt_app

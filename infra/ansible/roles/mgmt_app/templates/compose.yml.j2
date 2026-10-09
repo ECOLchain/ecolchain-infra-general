@@ -1,0 +1,24 @@
+# Compose da VM mgmt-api — containers por ambiente em portas distintas.
+# Gerenciado por Ansible (infra/ansible); não editar na mão na VM.
+name: mgmt-api
+services:
+{% if 'dev' in mgmt_envs %}
+  api-dev:
+    image: {{ app_dev.image }}
+    container_name: api-dev
+    restart: unless-stopped
+    ports:
+      - "{{ app_dev.port }}:8080"
+    env_file:
+      - env/api-dev.env
+{% endif %}
+{% if 'prod' in mgmt_envs %}
+  api-prod:
+    image: {{ app_prod.image }}
+    container_name: api-prod
+    restart: unless-stopped
+    ports:
+      - "{{ app_prod.port }}:8080"
+    env_file:
+      - env/api-prod.env
+{% endif %}
