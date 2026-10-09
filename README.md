@@ -12,12 +12,19 @@ infra/
     ├── oci/
     │   └── tfstate-backend/    # Bucket OCI de state + Customer Secret Key (S3)
     ├── landing-page/           # Projeto Vercel + DNS ecolchain.com / www (Cloudflare)
-    └── cloudflare/
-        └── email-routing/      # Email Routing catch-all -> Gmail (Cloudflare)
+    ├── cloudflare/
+    │   └── email-routing/      # Email Routing catch-all -> Gmail (Cloudflare)
+    ├── core-web/
+    │   ├── prod/               # app.ecolchain.com (bucket OCI + worker Cloudflare)
+    │   └── dev/                # app-dev-tester.ecolchain.com (Basic Auth)
+    └── modules/
+        └── web-hosting/        # Modulo reutilizavel (bucket OCI + worker + dominio)
 ```
 
-Cada pasta com `*.tf` é um **módulo raiz** com state próprio. A esteira detecta
-automaticamente qualquer diretório novo com arquivos `.tf` sob `infra/terraform`.
+Cada pasta com `backend.tf` é um **módulo raiz** com state próprio. A esteira
+detecta automaticamente qualquer diretório novo com `backend.tf` sob
+`infra/terraform`. Diretórios em `modules/` são **módulos reutilizáveis**
+(sem `backend.tf`) consumidos pelos módulos raiz.
 
 ## Backend remoto (OCI Object Storage)
 
@@ -49,18 +56,37 @@ repo/app, basta usar uma key única (`dev/backend-core/`, `prod/app-x/`...).
 ## Esteira CI/CD (feature -> main)
 
 ```
-push em feature/** ──► CI: fmt + validate + plan (matrix: cada módulo)
+push em feature/** ──► CI: detecta módulos ALTERADOS (diff vs main)
+                     └─► matrix só com eles: fmt + validate + plan
                      └─► auto-cria/atualiza PR → main com o plan no comentário
                      └─► revisão/aprovação do PR é o gate humano
 
-merge na main ──────► CD: init + plan -out + apply (matrix: cada módulo)
-                     └─► escreve no state remoto e aplica nos providers
+merge na main ──────► CD: detecta módulos alterados pelo merge
+                     ├─► não-prod (key dev/, staging/...): apply automático (matrix)
+                     └─► prod (key prod/): job com environment "prod"
+                         └─► exige aprovação manual → apply sequencial
 ```
 
 | Workflow | Trigger | O que faz |
 |---|---|---|
-| `ci-terraform-plan.yml` | push em `feature/**`, `feat/**` | Detecta módulos → matrix: `fmt -check`, `init`, `validate`, `plan` → abre/atualiza PR para `main` com o output do plan de cada módulo em comentário |
-| `ci-terraform-apply.yml` | push em `main` | Mesmo matrix → `init`, `plan -out=tfplan`, `apply tfplan` (concurrency por módulo) |
+| `ci-terraform-plan.yml` | push em `feature/**`, `feat/**` | Detecta módulos **alterados** (diff contra `main`; mudança em `modules/` marca os consumidores) → matrix: `fmt -check`, `init`, `validate`, `plan` → abre/atualiza PR para `main` com tabela de status + plan enxuto por módulo (plan completo no job summary) |
+| `ci-terraform-apply.yml` | push em `main` | Detecta módulos alterados pelo merge → **não-prod**: `init`/`plan -out`/`apply` em matrix paralelo → **prod**: job único com `environment: prod` (aprovação obrigatória) que aplica os módulos em sequência |
+
+A classificação prod/não-prod sai do primeiro segmento da `key` do `backend.tf`
+(`prod/...` = prod; `dev|staging|stage|qa|test|sandbox` = não-prod; qualquer
+outro prefixo cai em prod por segurança). Script:
+`.github/scripts/detect-changed-modules.sh` (executável localmente:
+`detect-changed-modules.sh --three-dot origin/main HEAD`).
+
+### Gate de produção (environment `prod`)
+
+O job `apply-prod` referencia o environment `prod`, que o GitHub cria
+automaticamente no primeiro uso. Para o gate de aprovação funcionar, um **admin
+do repo** precisa configurar uma vez:
+**Settings → Environments → prod → Required reviewers** (ex.: `leandroleitetech`).
+
+Sem essa regra, o job aplica sem gate (comportamento anterior). Opcionalmente,
+em "Deployment branches", restrinja o environment à branch `main`.
 
 ## Secrets
 
@@ -187,5 +213,3 @@ O módulo `oci/tfstate-backend` adicionalmente lê `env/terraform.tfvars` com
 - `.terraform.lock.hcl` **é commitado** — sempre gere para `linux_amd64`
   (CI) e `darwin_arm64` (local) com `terraform providers lock`.
 - `*.tfstate`, `*.tfvars`, `*.env`, `*.pem`, `env/` são gitignored por padrão.
-# ecolchain-infra-general
-Projetc for save general docs

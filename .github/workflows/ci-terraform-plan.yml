@@ -34,30 +34,33 @@ env:
 
 jobs:
   detect:
-    name: Detect Terraform Modules
+    name: Detect Changed Modules
     runs-on: ubuntu-latest
     outputs:
-      matrix: ${{ steps.dirs.outputs.matrix }}
+      dirs: ${{ steps.dirs.outputs.dirs }}
+      count: ${{ steps.dirs.outputs.count }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Find module directories
+      - name: Fetch main (diff base)
+        run: git fetch --no-tags origin main
+
+      - name: Detect changed modules
         id: dirs
-        run: |
-          DIRS=$(find infra/terraform -name 'backend.tf' -not -path '*/.terraform/*' -exec dirname {} \; | sort -u)
-          echo "Modulos detectados:"
-          echo "$DIRS"
-          echo "matrix=$(echo "$DIRS" | jq -R -s -c 'split("\n") | map(select(length > 0))')" >> "$GITHUB_OUTPUT"
+        run: .github/scripts/detect-changed-modules.sh --three-dot origin/main HEAD
 
   terraform:
     name: Plan (${{ matrix.dir }})
     needs: detect
+    if: ${{ needs.detect.outputs.count != '0' }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        dir: ${{ fromJSON(needs.detect.outputs.matrix) }}
+        dir: ${{ fromJSON(needs.detect.outputs.dirs) }}
 
     steps:
       - name: Checkout Code
@@ -93,20 +96,31 @@ jobs:
           if [ "$CODE" -eq 1 ]; then
             exit 1
           fi
-          echo "plan_exit_code=$CODE" >> "$GITHUB_ENV"
+          echo "$CODE" > "$RUNNER_TEMP/status-$SLUG.txt"
           echo "MODULE_SLUG=$SLUG" >> "$GITHUB_ENV"
 
       - name: Upload Plan Output
         uses: actions/upload-artifact@v4
         with:
           name: plan-${{ env.MODULE_SLUG }}
-          path: ${{ runner.temp }}/plan-*.txt
+          path: ${{ runner.temp }}/*-${{ env.MODULE_SLUG }}.txt
           retention-days: 1
+
+      - name: Append Plan to Job Summary
+        if: always()
+        run: |
+          SLUG=$(echo "${{ matrix.dir }}" | tr '/' '-')
+          {
+            echo "### Terraform Plan — \`${{ matrix.dir }}\`"
+            echo '```hcl'
+            tail -c 200000 "$RUNNER_TEMP/plan-$SLUG.txt" 2>/dev/null || echo "(sem output de plan)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
   auto-pr:
     name: Auto PR Feature -> Main
-    needs: terraform
-    if: success()
+    needs: [detect, terraform]
+    if: ${{ always() && needs.detect.result == 'success' && (needs.terraform.result == 'success' || needs.terraform.result == 'skipped') }}
     runs-on: ubuntu-latest
 
     steps:
@@ -114,6 +128,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Download Plan Outputs
+        if: ${{ needs.detect.outputs.count != '0' }}
         uses: actions/download-artifact@v4
         with:
           pattern: plan-*
@@ -123,17 +138,25 @@ jobs:
       - name: Auto Create or Update PR to Main
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MODULE_COUNT: ${{ needs.detect.outputs.count }}
         run: |
           BRANCH_NAME="${GITHUB_REF#refs/heads/}"
 
           PR_BODY="✨ **Terraform Plan executado com sucesso!**
 
-          Todos os módulos em \`infra/terraform\` passaram por \`fmt\`, \`validate\` e \`plan\`.
-          Confira o resultado do plan de cada módulo no comentário abaixo.
+          Os módulos alterados em \`infra/terraform\` passaram por \`fmt\`, \`validate\` e \`plan\`.
+          Confira o resultado do plan de cada módulo no comentário abaixo (e o output completo no job summary do workflow).
 
           ---
           PR automático gerado pelo pipeline de CI após validação da branch \`$BRANCH_NAME\`.
-          ⚠️ **Atenção:** após o merge, o pipeline de CD executará \`terraform apply\` na infraestrutura de produção."
+          ⚠️ **Atenção:** após o merge, o pipeline de CD executará \`terraform apply\` na infraestrutura (módulos de produção exigem aprovação no environment \`prod\`)."
+
+          if [ "$MODULE_COUNT" = "0" ]; then
+            PR_BODY="✨ **CI executado — nenhum módulo Terraform alterado neste push.**
+
+          ---
+          PR automático gerado pelo pipeline de CI após validação da branch \`$BRANCH_NAME\`."
+          fi
 
           EXISTING_PR=$(gh pr list --head "$BRANCH_NAME" --base main --json number --jq '.[0].number')
 
@@ -151,21 +174,44 @@ jobs:
 
           PR_NUMBER=$(gh pr list --head "$BRANCH_NAME" --base main --json number --jq '.[0].number')
 
-          if [ -n "$PR_NUMBER" ]; then
+          if [ -n "$PR_NUMBER" ] && [ "$MODULE_COUNT" != "0" ] && ls plans/plan-*.txt >/dev/null 2>&1; then
             COMMENT_FILE="$RUNNER_TEMP/plan-comment.md"
+            RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+
+            # Orcamento total ~58k chars (limite do comentario GH: ~64k);
+            # cada modulo recebe no max 20k ou a cota igualitaria
+            N=$(ls plans/plan-*.txt | wc -l | tr -d ' ')
+            PER=$(( (58000 - 2000) / N ))
+            [ "$PER" -gt 20000 ] && PER=20000
+
             {
               echo "## 📋 Resultado do Terraform Plan"
+              echo ""
+              echo "| Módulo | Status |"
+              echo "|---|---|"
+              for f in plans/plan-*.txt; do
+                MODULE=$(basename "$f" .txt | sed 's/^plan-//')
+                CODE=$(cat "plans/status-$MODULE.txt" 2>/dev/null || echo "?")
+                SUMMARY=$(grep -E '^(Plan:|No changes)' "$f" | head -1 | tr -d '\r')
+                case "$CODE" in
+                  0) ST="✅ Sem mudanças" ;;
+                  2) ST="🔶 Com mudanças" ;;
+                  *) ST="❓" ;;
+                esac
+                echo "| \`$MODULE\` | $ST${SUMMARY:+ — \`$SUMMARY\`} |"
+              done
               echo ""
               for f in plans/plan-*.txt; do
                 MODULE=$(basename "$f" .txt | sed 's/^plan-//')
                 echo "<details><summary>📦 <code>$MODULE</code></summary>"
                 echo ""
                 echo '```hcl'
-                tail -c 20000 "$f"
+                tail -c "$PER" "$f"
                 echo '```'
                 echo "</details>"
                 echo ""
               done
+              echo "📄 [Log completo do plan no workflow run]($RUN_URL)"
             } > "$COMMENT_FILE"
-            gh pr comment "$PR_NUMBER" --body-file "$COMMENT_FILE" || true
+            gh pr comment "$PR_NUMBER" --body-file "$COMMENT_FILE" || echo "⚠️ Falha ao comentar o plan no PR."
           fi

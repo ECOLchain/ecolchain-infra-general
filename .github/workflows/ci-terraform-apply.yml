@@ -28,30 +28,32 @@ env:
 
 jobs:
   detect:
-    name: Detect Terraform Modules
+    name: Detect Changed Modules
     runs-on: ubuntu-latest
     outputs:
-      matrix: ${{ steps.dirs.outputs.matrix }}
+      prod_dirs: ${{ steps.dirs.outputs.prod_dirs }}
+      prod_count: ${{ steps.dirs.outputs.prod_count }}
+      nonprod_dirs: ${{ steps.dirs.outputs.nonprod_dirs }}
+      nonprod_count: ${{ steps.dirs.outputs.nonprod_count }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Find module directories
+      - name: Detect changed modules
         id: dirs
-        run: |
-          DIRS=$(find infra/terraform -name 'backend.tf' -not -path '*/.terraform/*' -exec dirname {} \; | sort -u)
-          echo "Modulos detectados:"
-          echo "$DIRS"
-          echo "matrix=$(echo "$DIRS" | jq -R -s -c 'split("\n") | map(select(length > 0))')" >> "$GITHUB_OUTPUT"
+        run: .github/scripts/detect-changed-modules.sh "${{ github.event.before }}" "${{ github.sha }}"
 
   apply:
     name: Apply (${{ matrix.dir }})
     needs: detect
+    if: ${{ needs.detect.outputs.nonprod_count != '0' }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        dir: ${{ fromJSON(needs.detect.outputs.matrix) }}
+        dir: ${{ fromJSON(needs.detect.outputs.nonprod_dirs) }}
     concurrency:
       group: terraform-apply-${{ matrix.dir }}
 
@@ -78,3 +80,47 @@ jobs:
 
       - name: Terraform Apply
         run: terraform -chdir=${{ matrix.dir }} apply -input=false tfplan
+
+  apply-prod:
+    name: Apply (prod)
+    needs: detect
+    if: ${{ needs.detect.outputs.prod_count != '0' }}
+    runs-on: ubuntu-latest
+    environment: prod
+    concurrency:
+      group: terraform-apply-prod
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '~> 1.13.0'
+
+      - name: Write OCI API Key File
+        run: |
+          printf '%s' "${{ secrets.OCI_PRIVATE_KEY }}" > "$RUNNER_TEMP/oci_api_key.pem"
+          chmod 600 "$RUNNER_TEMP/oci_api_key.pem"
+          echo "TF_VAR_private_key_path=$RUNNER_TEMP/oci_api_key.pem" >> "$GITHUB_ENV"
+
+      - name: Init + Plan + Apply (sequencial por modulo)
+        env:
+          PROD_DIRS: ${{ needs.detect.outputs.prod_dirs }}
+        run: |
+          FAILED=()
+          for dir in $(echo "$PROD_DIRS" | jq -r '.[]'); do
+            echo "::group::${dir}"
+            if ! ( terraform -chdir="$dir" init -input=false \
+                && terraform -chdir="$dir" plan -out=tfplan -input=false \
+                && terraform -chdir="$dir" apply -input=false tfplan ); then
+              FAILED+=("$dir")
+              echo "::error::Falha no apply do modulo ${dir}"
+            fi
+            echo "::endgroup::"
+          done
+          if [ "${#FAILED[@]}" -gt 0 ]; then
+            echo "::error::Modulos com falha no apply: ${FAILED[*]}"
+            exit 1
+          fi
