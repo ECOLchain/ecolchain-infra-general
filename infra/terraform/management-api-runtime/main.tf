@@ -297,3 +297,4 @@ resource "random_password" "otp_pepper" {
   length  = 32
   special = false
 }
+# Trigger: re-run Ansible (swap fix) nas VMs já criadas
