@@ -297,4 +297,4 @@ resource "random_password" "otp_pepper" {
   length  = 32
   special = false
 }
-# Trigger: run Ansible nas 2 VMs (dnf guards + detect script)
+# Trigger: retry Ansible p/ VM prod (ssh banner timeout)
