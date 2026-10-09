@@ -76,6 +76,12 @@ else
         ;;
     esac
   done <<< "$changed"
+
+  # Mudanca no Ansible do management-api: marca o modulo runtime p/ o job
+  # de apply re-rodar o provisionamento (apply sera no-op, Ansible roda).
+  if git diff --name-only "$BASE..$HEAD" -- infra/ansible 2>/dev/null | grep -q .; then
+    in_list "$ROOT/management-api-runtime" || affected+=("$ROOT/management-api-runtime")
+  fi
 fi
 
 prod=()
