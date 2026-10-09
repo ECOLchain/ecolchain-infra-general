@@ -1,10 +1,14 @@
 # Hardening básico: firewall só com o necessário + SSH sem senha + updates de segurança.
+# Guarda por rpm -q: uma corrida anterior do dnf pode deixar o pacote
+# instalado fora do que o módulo enxerga ("Transaction test error:
+# package X is already installed") — nesse caso rpm -q retorna 0 e pulamos.
 - name: Instalar firewalld e dnf-automatic
-  ansible.builtin.dnf:
-    name:
-      - firewalld
-      - dnf-automatic
-    state: present
+  ansible.builtin.shell: |
+    rpm -q firewalld dnf-automatic >/dev/null 2>&1 || dnf install -y firewalld dnf-automatic
+  args:
+    executable: /bin/bash
+  register: hardening_pkgs
+  changed_when: hardening_pkgs.stdout is search("Installing|Installed:")
 
 - name: firewalld habilitado
   ansible.builtin.systemd:
