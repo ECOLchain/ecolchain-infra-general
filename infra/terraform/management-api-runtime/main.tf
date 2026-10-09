@@ -297,4 +297,4 @@ resource "random_password" "otp_pepper" {
   length  = 32
   special = false
 }
-# Trigger: re-run Ansible (keepalive+retries no ansible.cfg)
+# Trigger: re-run Ansible (ssh retries no ansible.cfg)
