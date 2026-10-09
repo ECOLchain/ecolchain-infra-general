@@ -84,7 +84,7 @@ resource "oci_load_balancer_certificate" "origin" {
 
 resource "oci_load_balancer_load_balancer_routing_policy" "hostnames" {
   load_balancer_id           = oci_load_balancer_load_balancer.api.id
-  name                       = "api-hostname-routing"
+  name                       = "api_hostname_routing"
   condition_language_version = "V1"
 
   rules {
@@ -110,7 +110,7 @@ resource "oci_load_balancer_load_balancer_routing_policy" "hostnames" {
 
 resource "oci_load_balancer_listener" "https" {
   load_balancer_id         = oci_load_balancer_load_balancer.api.id
-  name                     = "https-443"
+  name                     = "https_443"
   default_backend_set_name = oci_load_balancer_backend_set.api_dev.name
   port                     = 443
   protocol                 = "HTTP"

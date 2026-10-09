@@ -83,6 +83,12 @@ variable "ssh_ingress_cidr" {
   default     = "0.0.0.0/0"
 }
 
+variable "vm_ad_index" {
+  description = "Indice do availability domain (0..N) - trocar quando o AD atual estiver sem capacidade A1.Flex"
+  type        = number
+  default     = 0
+}
+
 variable "vm_ocpus" {
   description = "OCPUs do shape A1.Flex (free tier: até 4 no total da tenancy)"
   type        = number
