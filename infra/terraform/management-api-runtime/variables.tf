@@ -84,9 +84,9 @@ variable "ssh_ingress_cidr" {
 }
 
 variable "vm_shape" {
-  description = "Shape das VMs. Default E4.Flex x86 (PAYG: OCPU/RAM ajustáveis via vm_ocpus/vm_memory_gbs); A1.Flex (ARM) exige imagem arm64 + capacidade"
+  description = "Shape das VMs. Default E5.Flex x86 PAYG (OCPU/RAM via vm_ocpus/vm_memory_gbs); E2.1.Micro nao aceita resize in-place (serie propria) -> trocar shape = destroy+create; E4.Flex/E2.x sem capacidade em GRU (capacity report 2026-10-10); A1.Flex (ARM) exige imagem arm64 + capacidade"
   type        = string
-  default     = "VM.Standard.E4.Flex"
+  default     = "VM.Standard.E5.Flex"
 }
 
 variable "vm_ad_index" {
@@ -104,7 +104,7 @@ variable "vm_ocpus" {
 variable "vm_memory_gbs" {
   description = "RAM por VM em GB (shapes Flex; A1.Flex free tier: até 24 no total da tenancy)"
   type        = number
-  default     = 8
+  default     = 16
 }
 
 variable "app_dev_port" {
