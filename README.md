@@ -20,7 +20,7 @@ infra/
     │   ├── prod/               # app.ecolchain.com (bucket OCI + worker Cloudflare)
     │   └── dev/                # app-dev-tester.ecolchain.com (Basic Auth)
     ├── management-api/         # Dados da API de gestão (ADB + bucket de documentos)
-    ├── management-api-runtime/ # Runtime da API: VCN + VM A1.Flex + LB + OCIR + DNS api-dev/api-prod
+    ├── management-api-runtime/ # Runtime da API: VCN + VMs Flex x86 + LB + OCIR + DNS api-dev/api-prod
     ├── management-web/
     │   ├── prod/               # manage.ecolchain.com (bucket OCI + worker Cloudflare)
     │   └── dev/                # manage-dev.ecolchain.com (Basic Auth)

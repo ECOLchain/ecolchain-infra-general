@@ -84,25 +84,25 @@ variable "ssh_ingress_cidr" {
 }
 
 variable "vm_shape" {
-  description = "Shape das VMs. Default E2.1.Micro (x86, Always Free x2); A1.Flex (ARM) exige imagem arm64 + capacidade"
+  description = "Shape das VMs. Default E4.Flex x86 (PAYG: OCPU/RAM ajustáveis via vm_ocpus/vm_memory_gbs); A1.Flex (ARM) exige imagem arm64 + capacidade"
   type        = string
-  default     = "VM.Standard.E2.1.Micro"
+  default     = "VM.Standard.E4.Flex"
 }
 
 variable "vm_ad_index" {
-  description = "Indice do availability domain (0..N) - trocar quando o AD atual estiver sem capacidade A1.Flex"
+  description = "Indice do availability domain (0..N) - trocar quando o AD atual estiver sem capacidade"
   type        = number
   default     = 0
 }
 
 variable "vm_ocpus" {
-  description = "OCPUs do shape A1.Flex (free tier: até 4 no total da tenancy)"
+  description = "OCPUs por VM (shapes Flex: E4.Flex 1-64; A1.Flex free tier: até 4 no total da tenancy)"
   type        = number
-  default     = 1
+  default     = 2
 }
 
 variable "vm_memory_gbs" {
-  description = "RAM do shape A1.Flex em GB (free tier: até 24 no total da tenancy)"
+  description = "RAM por VM em GB (shapes Flex; A1.Flex free tier: até 24 no total da tenancy)"
   type        = number
   default     = 8
 }
