@@ -185,11 +185,14 @@ resource "oci_core_network_security_group_security_rule" "vm_egress" {
 }
 
 # ------------------------------------------------------------------
-# Compute — 2 VMs (default E4.Flex x86 PAYG, 2 OCPU/8 GB), uma por
+# Compute — 2 VMs (default E5.Flex x86 PAYG, 2 OCPU/16 GB), uma por
 # ambiente: mgmt-api-vm-dev roda o container api-dev e
 # mgmt-api-vm-prod roda api-prod — container único por VM.
 # Shape parametrizado: Always Free = E2.1.Micro (x86, ~1 GB) ou
 # A1.Flex (ARM, imagem arm64 + capacidade); ver docs/DUVIDAS.md.
+# E2.1.Micro nao aceita resize in-place (serie propria) — saida dele
+# e destroy+create (taint/-replace); LB backend e dynamic group
+# atualizam sozinhos no mesmo apply.
 # SSH: par gerado pelo Terraform; a private key fica só no state e
 # sai via `terraform output -raw ssh_private_key` (usada pelo CD/Ansible).
 # ------------------------------------------------------------------

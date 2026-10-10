@@ -138,17 +138,27 @@ adotada em cada uma (checkbox = ponto que valeria revisão futura).
   de main.tf conflita a cada merge (mesma linha tocada por branches
   concorrentes); resolve com rebase + reescrever a linha.
 
-## Pivot de compute: 2x E2.1.Micro -> 2x E4.Flex (PAYG) — 2026-10-10
+## Pivot de compute: 2x E2.1.Micro -> 2x E5.Flex (PAYG) — 2026-10-10
 
 - [ ] **E2.1.Micro inviável p/ provisionamento** — ~500 MB RAM reais:
   `dnf` (depsolve) infla a ~350 MB e o OOM-killer global mata o processo
   (`rc -9`) até com swap 1.5G e VM idle; `dnf makecache` do sistema morreu
-  do mesmo jeito. Decisão do dono: sair do Always Free p/ `E4.Flex`
-  (x86 PAYG, conta com saldo) — default `vm_ocpus=2`/`vm_memory_gbs=8`.
-  Shape Flex é atualizado in-place pela OCI (reboot, sem recriar).
+  do mesmo jeito. Decisão do dono: sair do Always Free (conta com saldo
+  PAYG) — default `vm_ocpus=2`/`vm_memory_gbs=16`.
+- [ ] **Micro não aceita resize in-place, nem pra E2.x** — UpdateInstance
+  rejeitou E4.Flex **e** E2.2 ("hardware series not compatible"): o Micro
+  é série própria. Saída = destroy+create (`terraform taint` /
+  `-replace`). LB backend (`private_ip`), dynamic group (`instance.id`)
+  e chave SSH se atualizam no mesmo apply; VMs voltam com IP público novo
+  e o Ansible do próprio apply provisiona do zero.
+- [ ] **GRU sem capacidade em quase tudo** — `compute-capacity-report`
+  no único AD (2026-10-10): OUT_OF_HOST_CAPACITY em E4.Flex (1-2 OCPU),
+  E3.Flex, E2.x fixos e A1.Flex; AVAILABLE em **E5.Flex** (até 4/16),
+  Standard3.Flex e Standard2.1. Escolhido `E5.Flex` (x86 novo, Flex ->
+  OCPU/RAM ajustáveis sem trocar shape; imagens amd64 seguem).
 - [ ] **`shape_config` genérico p/ Flex** — condição virou
-  `strcontains(var.vm_shape, "Flex")` (E4.Flex, A1.Flex...); shapes fixed
-  seguem sem o bloco. Imagens da API continuam linux/amd64.
+  `strcontains(var.vm_shape, "Flex")` (E5/E4/E3/A1.Flex...); shapes fixed
+  seguem sem o bloco.
 - [ ] **JVM tuning 1 GB** (`JAVA_MAX_MEM_RATIO=70` + SerialGC) fica
-  conservador demais p/ 8 GB mas segue válido — revertível no env do
+  conservador demais p/ 16 GB mas segue válido — revertível no env do
   `ansible_vars` se quiser G1/heap maior.
