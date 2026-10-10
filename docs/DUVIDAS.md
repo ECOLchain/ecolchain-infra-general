@@ -137,3 +137,18 @@ adotada em cada uma (checkbox = ponto que valeria revisão futura).
 - [ ] **Squash-merge + mesma linha final** — comentário "# Trigger" no fim
   de main.tf conflita a cada merge (mesma linha tocada por branches
   concorrentes); resolve com rebase + reescrever a linha.
+
+## Pivot de compute: 2x E2.1.Micro -> 2x E4.Flex (PAYG) — 2026-10-10
+
+- [ ] **E2.1.Micro inviável p/ provisionamento** — ~500 MB RAM reais:
+  `dnf` (depsolve) infla a ~350 MB e o OOM-killer global mata o processo
+  (`rc -9`) até com swap 1.5G e VM idle; `dnf makecache` do sistema morreu
+  do mesmo jeito. Decisão do dono: sair do Always Free p/ `E4.Flex`
+  (x86 PAYG, conta com saldo) — default `vm_ocpus=2`/`vm_memory_gbs=8`.
+  Shape Flex é atualizado in-place pela OCI (reboot, sem recriar).
+- [ ] **`shape_config` genérico p/ Flex** — condição virou
+  `strcontains(var.vm_shape, "Flex")` (E4.Flex, A1.Flex...); shapes fixed
+  seguem sem o bloco. Imagens da API continuam linux/amd64.
+- [ ] **JVM tuning 1 GB** (`JAVA_MAX_MEM_RATIO=70` + SerialGC) fica
+  conservador demais p/ 8 GB mas segue válido — revertível no env do
+  `ansible_vars` se quiser G1/heap maior.

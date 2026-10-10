@@ -185,11 +185,11 @@ resource "oci_core_network_security_group_security_rule" "vm_egress" {
 }
 
 # ------------------------------------------------------------------
-# Compute — 2 VMs E2.1.Micro (AMD x86, Always Free: 2 VMs grátis),
-# uma por ambiente: mgmt-api-vm-dev roda o container api-dev e
-# mgmt-api-vm-prod roda api-prod. 1 GB RAM cada — container único
-# por VM. Shape parametrizado: voltar p/ A1.Flex (ARM) é trocar var
-# + contar; ver docs/DUVIDAS.md.
+# Compute — 2 VMs (default E4.Flex x86 PAYG, 2 OCPU/8 GB), uma por
+# ambiente: mgmt-api-vm-dev roda o container api-dev e
+# mgmt-api-vm-prod roda api-prod — container único por VM.
+# Shape parametrizado: Always Free = E2.1.Micro (x86, ~1 GB) ou
+# A1.Flex (ARM, imagem arm64 + capacidade); ver docs/DUVIDAS.md.
 # SSH: par gerado pelo Terraform; a private key fica só no state e
 # sai via `terraform output -raw ssh_private_key` (usada pelo CD/Ansible).
 # ------------------------------------------------------------------
@@ -211,8 +211,8 @@ data "oci_identity_availability_domains" "this" {
   compartment_id = local.compartment_id
 }
 
-# A1.Flex aceita shape_config (ocpus/memoria); shapes fixed (E2.1.Micro)
-# rejeitam o bloco — so entra quando o shape for Flex.
+# Shapes Flex (E4.Flex, A1.Flex...) aceitam shape_config (ocpus/memoria);
+# shapes fixed (E2.1.Micro) rejeitam o bloco — so entra em shape Flex.
 resource "oci_core_instance" "dev" {
   compartment_id      = local.compartment_id
   availability_domain = data.oci_identity_availability_domains.this.availability_domains[var.vm_ad_index].name
@@ -220,7 +220,7 @@ resource "oci_core_instance" "dev" {
   shape               = var.vm_shape
 
   dynamic "shape_config" {
-    for_each = var.vm_shape == "VM.Standard.A1.Flex" ? [1] : []
+    for_each = strcontains(var.vm_shape, "Flex") ? [1] : []
     content {
       ocpus         = var.vm_ocpus
       memory_in_gbs = var.vm_memory_gbs
@@ -259,7 +259,7 @@ resource "oci_core_instance" "prod" {
   shape               = var.vm_shape
 
   dynamic "shape_config" {
-    for_each = var.vm_shape == "VM.Standard.A1.Flex" ? [1] : []
+    for_each = strcontains(var.vm_shape, "Flex") ? [1] : []
     content {
       ocpus         = var.vm_ocpus
       memory_in_gbs = var.vm_memory_gbs
